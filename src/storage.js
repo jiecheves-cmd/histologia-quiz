@@ -12,7 +12,7 @@ export function useStorage() {
       const { error } = await supabase
         .from('histo_store')
         .upsert({
-          key: storeKey,
+          storage_key: storeKey,
           value: JSON.stringify(value),
           shared,
           updated_at: new Date().toISOString()
@@ -29,7 +29,7 @@ export function useStorage() {
       const { data, error } = await supabase
         .from('histo_store')
         .select('value')
-        .eq('key', storeKey)
+        .eq('storage_key', storeKey)
         .maybeSingle()
       if (error || !data) return def
       return JSON.parse(data.value)
