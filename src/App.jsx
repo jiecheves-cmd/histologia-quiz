@@ -73,17 +73,7 @@ function periodKey(dateStr, period) {
   return "" + d.getFullYear();
 }
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
-function useStorage() {
-  const save = async (k, v, shared = false) => {
-    try { await window.storage.set(k, JSON.stringify(v), shared); } catch(e) {}
-  };
-  const load = async (k, def, shared = false) => {
-    try { const r = await window.storage.get(k, shared); return r ? JSON.parse(r.value) : def; }
-    catch(e) { return def; }
-  };
-  return { save, load };
-}
+
 function diffStyle(d) {
   const n = (d||"").toLowerCase().trim();
   return {
