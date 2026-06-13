@@ -813,19 +813,20 @@ function ImportView({ db, updateDb, genDiff, setGenDiff }) {
         "Responde SOLO con un array JSON sin texto extra ni backticks:\n"+
         "[{\"question\":\"...\",\"options\":[\"...\",\"...\",\"...\",\"...\"],\"answer\":0,\"explanation\":\"...\"}]\n"+
         "\"answer\" es el índice 0-3 de la opción correcta. Explicaciones breves (máx 2 frases).";
-      const msgContent = [
-        { type:"document", source:{ type:"base64", media_type: isPdf ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document", data: b64 } },
-        { type:"text", text: prompt }
-      ];
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST",
-        headers:{"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01"},
-        body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:2000, messages:[{role:"user",content:msgContent}] })
-      });
-      if (!res.ok) { const err=await res.text(); throw new Error("HTTP "+res.status+": "+err.slice(0,200)); }
-      const data  = await res.json();
-      if (!data.content||!Array.isArray(data.content)) throw new Error("Respuesta inesperada: "+JSON.stringify(data).slice(0,200));
-      const text  = data.content.map(c=>c.text||"").join("");
+      const res = await fetch("/api/generate-questions", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ prompt })
+});
+
+if (!res.ok) {
+  const err = await res.text();
+  throw new Error("HTTP " + res.status + ": " + err.slice(0, 200));
+}
+
+const data = await res.json();
+if (!data.text) throw new Error("Respuesta inesperada: " + JSON.stringify(data).slice(0, 200));
+const text = data.text;
       const match = text.match(/\[[\s\S]*\]/);
       if (!match) throw new Error("No se encontró JSON en la respuesta.");
       const parsed = JSON.parse(match[0]);
