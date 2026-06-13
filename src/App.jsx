@@ -819,7 +819,7 @@ function ImportView({ db, updateDb, genDiff, setGenDiff }) {
       ];
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method:"POST",
-        headers:{"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01"},
         body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:2000, messages:[{role:"user",content:msgContent}] })
       });
       if (!res.ok) { const err=await res.text(); throw new Error("HTTP "+res.status+": "+err.slice(0,200)); }
@@ -1081,7 +1081,7 @@ function TeacherMode({ db, updateDb, isSupervisor }) {
         "\"answer\" es el índice 0-3. Explicaciones breves (máx 2 frases).";
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method:"POST",
-        headers:{"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01"},
         body: JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,messages:[{role:"user",content:prompt}]})
       });
       if (!res.ok) { const err = await res.text(); throw new Error("HTTP "+res.status+": "+err.slice(0,200)); }
