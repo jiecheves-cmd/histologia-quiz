@@ -291,34 +291,54 @@ const myPoints = ranking.find(r => r.name === studentName)?.points || 0;
   };
 
   // Config
-  if (phase==="config") return (
-    <div>
-      <p style={{fontSize:14,color:"var(--color-text-secondary)",marginBottom:"1.25rem"}}>
-        Hola, <strong style={{color:"var(--color-text-primary)"}}>{studentName}</strong>. Configura tu sesión:
-      </p>
-<div style={{
-  marginBottom:"1.25rem",
-  padding:"12px 16px",
-  borderRadius:"var(--border-radius-md)",
-  background:"#F0EAF9",
-  border:"0.5px solid #C9A8F0",
-  color:"#5B2D9E",
-  fontSize:13,
-  fontWeight:600
-}}>
-  🏆 Tu posición en el ranking: {myRank ? "#" + myRank : "Sin ranking"} · {myPoints.toFixed(2)} pts
-</div>
+if (phase==="config") return (
+  <div style={{display:"grid",gridTemplateColumns:"minmax(0,1.6fr) minmax(280px,0.8fr)",gap:24,alignItems:"start"}}>
+    
+    {/* Panel principal */}
+    <div style={{
+      background:"rgba(255,255,255,0.88)",
+      border:"1px solid rgba(255,255,255,0.95)",
+      borderRadius:28,
+      padding:28,
+      boxShadow:"0 24px 70px rgba(44,39,80,0.12)"
+    }}>
+      <div style={{marginBottom:24}}>
+        <div style={{fontSize:13,fontWeight:700,color:"#6C4CFF",marginBottom:8}}>
+          MODO ALUMNO
+        </div>
+        <h1 style={{
+          fontSize:34,
+          lineHeight:1.05,
+          letterSpacing:"-0.04em",
+          margin:"0 0 10px",
+          color:"var(--color-text-primary)"
+        }}>
+          Prepara tu sesión de histología
+        </h1>
+        <p style={{fontSize:15,color:"var(--color-text-secondary)",margin:0}}>
+          Hola, <strong style={{color:"var(--color-text-primary)"}}>{studentName}</strong>. Elige dificultad, temas y número de preguntas.
+        </p>
+      </div>
+
       {/* Difficulty */}
-      <div style={{marginBottom:"1.25rem"}}>
-        <p style={{fontSize:13,fontWeight:500,color:"var(--color-text-primary)",margin:"0 0 8px"}}>Dificultad</p>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+      <div style={{marginBottom:24}}>
+        <p style={{fontSize:14,fontWeight:700,color:"var(--color-text-primary)",margin:"0 0 10px"}}>
+          Dificultad
+        </p>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           {["todas","básico","intermedio","avanzado"].map(d => (
             <button key={d} onClick={() => setFilter(d)}
-              style={{padding:"6px 16px",borderRadius:"var(--border-radius-md)",fontSize:13,cursor:"pointer",
-                background:filter===d?"var(--color-background-secondary)":"transparent",
-                color:"var(--color-text-primary)",fontWeight:filter===d?600:400,
-                border:filter===d?"0.5px solid var(--color-border-secondary)":"0.5px solid var(--color-border-tertiary)",
-                textTransform:"capitalize"}}>
+              style={{
+                padding:"10px 18px",
+                borderRadius:16,
+                fontSize:14,
+                cursor:"pointer",
+                background:filter===d?"#6C4CFF":"#FFFFFF",
+                color:filter===d?"#FFFFFF":"var(--color-text-primary)",
+                fontWeight:filter===d?800:600,
+                border:filter===d?"1px solid #6C4CFF":"1px solid var(--color-border-tertiary)",
+                textTransform:"capitalize"
+              }}>
               {d}
             </button>
           ))}
@@ -326,74 +346,185 @@ const myPoints = ranking.find(r => r.name === studentName)?.points || 0;
       </div>
 
       {/* Topics */}
-      <div style={{marginBottom:"1.25rem"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <p style={{fontSize:13,fontWeight:500,color:"var(--color-text-primary)",margin:0}}>Temas</p>
+      <div style={{marginBottom:24}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,gap:12}}>
+          <p style={{fontSize:14,fontWeight:700,color:"var(--color-text-primary)",margin:0}}>
+            Temas
+          </p>
           <div style={{display:"flex",gap:8}}>
             <button onClick={() => setSelectedTopics([...availableTopics])}
-              style={{fontSize:11,padding:"2px 10px",borderRadius:10,cursor:"pointer",
-                background:"var(--color-background-secondary)",color:"var(--color-text-secondary)",
-                border:"0.5px solid var(--color-border-tertiary)"}}>
+              style={{
+                fontSize:12,
+                padding:"6px 12px",
+                borderRadius:999,
+                cursor:"pointer",
+                background:"#F5F3FF",
+                color:"#5B31D6",
+                border:"1px solid #DDD6FE",
+                fontWeight:700
+              }}>
               Todos
             </button>
             <button onClick={() => setSelectedTopics([])}
-              style={{fontSize:11,padding:"2px 10px",borderRadius:10,cursor:"pointer",
-                background:"var(--color-background-secondary)",color:"var(--color-text-secondary)",
-                border:"0.5px solid var(--color-border-tertiary)"}}>
+              style={{
+                fontSize:12,
+                padding:"6px 12px",
+                borderRadius:999,
+                cursor:"pointer",
+                background:"#FFFFFF",
+                color:"var(--color-text-secondary)",
+                border:"1px solid var(--color-border-tertiary)",
+                fontWeight:700
+              }}>
               Ninguno
             </button>
           </div>
         </div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+
+        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
           {availableTopics.map(t => {
             const active = selectedTopics.includes(t);
             const count  = db.filter(q => q.topic===t && (filter==="todas"||q.difficulty===filter)).length;
             return (
               <button key={t} onClick={() => toggleTopic(t)}
-                style={{fontSize:12,padding:"4px 12px",borderRadius:20,cursor:"pointer",
-                  fontWeight:active?600:400,
-                  background:active?"var(--color-background-info)":"transparent",
-                  color:active?"var(--color-text-info)":"var(--color-text-secondary)",
-                  border:active?"0.5px solid var(--color-border-info)":"0.5px solid var(--color-border-tertiary)"}}>
+                style={{
+                  fontSize:12,
+                  padding:"8px 13px",
+                  borderRadius:999,
+                  cursor:"pointer",
+                  fontWeight:active?800:600,
+                  background:active?"#EFE9FF":"#FFFFFF",
+                  color:active?"#5B31D6":"var(--color-text-secondary)",
+                  border:active?"1px solid #C9BBFF":"1px solid var(--color-border-tertiary)"
+                }}>
                 {t} <span style={{fontSize:10,opacity:0.7}}>({count})</span>
               </button>
             );
           })}
         </div>
-        <p style={{fontSize:12,color:"var(--color-text-secondary)",margin:"6px 0 0"}}>
+
+        <p style={{fontSize:13,color:"var(--color-text-secondary)",margin:"10px 0 0"}}>
           {selectedTopics.length===0 ? "Todos los temas seleccionados" : selectedTopics.length+" tema"+( selectedTopics.length!==1?"s":"")+" seleccionado"+(selectedTopics.length!==1?"s":"")}
         </p>
       </div>
 
       {/* Num questions */}
-      <div style={{marginBottom:"1.75rem"}}>
-        <p style={{fontSize:13,fontWeight:500,color:"var(--color-text-primary)",margin:"0 0 8px"}}>Número de preguntas</p>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+      <div style={{marginBottom:28}}>
+        <p style={{fontSize:14,fontWeight:700,color:"var(--color-text-primary)",margin:"0 0 10px"}}>
+          Número de preguntas
+        </p>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           {[5,10,15,20].map(n => {
             const disabled = poolSize < n;
             return (
               <button key={n} onClick={() => !disabled && setNumQ(n)}
-                style={{width:52,height:40,borderRadius:"var(--border-radius-md)",fontSize:15,
-                  fontWeight:numQ===n?700:400, cursor:disabled?"not-allowed":"pointer", opacity:disabled?0.35:1,
-                  background:numQ===n?"var(--color-background-info)":"transparent",
-                  color:numQ===n?"var(--color-text-info)":"var(--color-text-primary)",
-                  border:numQ===n?"0.5px solid var(--color-border-info)":"0.5px solid var(--color-border-tertiary)"}}>
+                style={{
+                  width:62,
+                  height:48,
+                  borderRadius:16,
+                  fontSize:16,
+                  fontWeight:numQ===n?800:600,
+                  cursor:disabled?"not-allowed":"pointer",
+                  opacity:disabled?0.35:1,
+                  background:numQ===n?"#6C4CFF":"#FFFFFF",
+                  color:numQ===n?"#FFFFFF":"var(--color-text-primary)",
+                  border:numQ===n?"1px solid #6C4CFF":"1px solid var(--color-border-tertiary)"
+                }}>
                 {n}
               </button>
             );
           })}
         </div>
-        <p style={{fontSize:12,color:"var(--color-text-secondary)",margin:"6px 0 0"}}>{poolSize} preguntas disponibles</p>
+        <p style={{fontSize:13,color:"var(--color-text-secondary)",margin:"10px 0 0"}}>
+          {poolSize} preguntas disponibles con esta configuración.
+        </p>
       </div>
 
       <button onClick={start} disabled={!poolSize}
-        style={{padding:"9px 28px",borderRadius:"var(--border-radius-md)",fontSize:14,fontWeight:600,
-          cursor:poolSize?"pointer":"not-allowed", opacity:poolSize?1:0.5,
-          background:"var(--color-background-info)",color:"var(--color-text-info)",border:"0.5px solid var(--color-border-info)"}}>
+        style={{
+          width:"100%",
+          padding:"16px 28px",
+          borderRadius:20,
+          fontSize:16,
+          fontWeight:800,
+          cursor:poolSize?"pointer":"not-allowed",
+          opacity:poolSize?1:0.5,
+          background:"linear-gradient(135deg,#6C4CFF,#8B5CF6)",
+          color:"#FFFFFF",
+          border:"0",
+          boxShadow:"0 18px 35px rgba(108,76,255,0.28)"
+        }}>
         Empezar quiz
       </button>
     </div>
-  );
+
+    {/* Panel lateral */}
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <div style={{
+        background:"linear-gradient(135deg,#6C4CFF,#8B5CF6)",
+        color:"#FFFFFF",
+        borderRadius:28,
+        padding:24,
+        boxShadow:"0 24px 60px rgba(108,76,255,0.28)"
+      }}>
+        <div style={{fontSize:13,fontWeight:700,opacity:0.86,marginBottom:10}}>
+          TU PROGRESO
+        </div>
+        <div style={{fontSize:42,fontWeight:900,lineHeight:1,letterSpacing:"-0.05em"}}>
+          {myRank ? "#" + myRank : "—"}
+        </div>
+        <div style={{fontSize:14,opacity:0.9,marginTop:8}}>
+          posición en el ranking
+        </div>
+        <div style={{
+          marginTop:18,
+          paddingTop:18,
+          borderTop:"1px solid rgba(255,255,255,0.25)",
+          fontSize:15,
+          fontWeight:800
+        }}>
+          {myPoints.toFixed(2)} puntos acumulados
+        </div>
+      </div>
+
+      <div style={{
+        background:"rgba(255,255,255,0.9)",
+        border:"1px solid rgba(255,255,255,0.95)",
+        borderRadius:28,
+        padding:22,
+        boxShadow:"0 18px 50px rgba(44,39,80,0.10)"
+      }}>
+        <div style={{fontSize:13,fontWeight:800,color:"var(--color-text-primary)",marginBottom:14}}>
+          Resumen de la sesión
+        </div>
+
+        <div style={{display:"grid",gap:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",gap:12}}>
+            <span style={{color:"var(--color-text-secondary)",fontSize:13}}>Dificultad</span>
+            <strong style={{fontSize:13,textTransform:"capitalize"}}>{filter}</strong>
+          </div>
+
+          <div style={{display:"flex",justifyContent:"space-between",gap:12}}>
+            <span style={{color:"var(--color-text-secondary)",fontSize:13}}>Temas</span>
+            <strong style={{fontSize:13}}>
+              {selectedTopics.length===0 ? "Todos" : selectedTopics.length}
+            </strong>
+          </div>
+
+          <div style={{display:"flex",justifyContent:"space-between",gap:12}}>
+            <span style={{color:"var(--color-text-secondary)",fontSize:13}}>Preguntas</span>
+            <strong style={{fontSize:13}}>{numQ}</strong>
+          </div>
+
+          <div style={{display:"flex",justifyContent:"space-between",gap:12}}>
+            <span style={{color:"var(--color-text-secondary)",fontSize:13}}>Disponibles</span>
+            <strong style={{fontSize:13}}>{poolSize}</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
 
   // Results
   if (phase==="results") {
