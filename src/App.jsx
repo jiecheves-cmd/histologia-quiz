@@ -251,9 +251,16 @@ const myPoints = ranking.find(r => r.name === studentName)?.points || 0;
     const seenKey = "histo_seen_" + filter + "_" + (selectedTopics.length===0?"all":selectedTopics.slice().sort().join(","));
     let seen = await load(seenKey, []);
     let unseen = pool.filter(q => !seen.includes(q.id));
-    if (!unseen.length) { seen = []; unseen = pool; }
-    const batch = unseen.sort(() => Math.random()-0.5).slice(0, Math.min(numQ, unseen.length));
-    save(seenKey, [...seen, ...batch.map(q => q.id)]);
+
+// Si quedan pocas preguntas no vistas, completamos con preguntas ya vistas
+// para respetar el número elegido por el alumno.
+const shuffledUnseen = unseen.sort(() => Math.random()-0.5);
+const seenPool = pool.filter(q => seen.includes(q.id)).sort(() => Math.random()-0.5);
+const batch = [...shuffledUnseen, ...seenPool].slice(0, Math.min(numQ, pool.length));
+
+// Si ya hemos usado todas las preguntas del filtro, reiniciamos el historial.
+const newSeen = [...new Set([...seen, ...batch.map(q => q.id)])];
+save(seenKey, newSeen.length >= pool.length ? [] : newSeen);
     const shuffled = batch.map(q => {
       const idx = q.options.map((opt, i) => ({ opt, correct: i===q.answer }));
       idx.sort(() => Math.random()-0.5);
