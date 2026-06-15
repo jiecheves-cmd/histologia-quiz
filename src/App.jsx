@@ -296,7 +296,18 @@ const myPoints = ranking.find(r => r.name === studentName)?.points || 0;
       <p style={{fontSize:14,color:"var(--color-text-secondary)",marginBottom:"1.25rem"}}>
         Hola, <strong style={{color:"var(--color-text-primary)"}}>{studentName}</strong>. Configura tu sesión:
       </p>
-
+<div style={{
+  marginBottom:"1.25rem",
+  padding:"12px 16px",
+  borderRadius:"var(--border-radius-md)",
+  background:"#F0EAF9",
+  border:"0.5px solid #C9A8F0",
+  color:"#5B2D9E",
+  fontSize:13,
+  fontWeight:600
+}}>
+  🏆 Tu posición en el ranking: {myRank ? "#" + myRank : "Sin ranking"} · {myPoints.toFixed(2)} pts
+</div>
       {/* Difficulty */}
       <div style={{marginBottom:"1.25rem"}}>
         <p style={{fontSize:13,fontWeight:500,color:"var(--color-text-primary)",margin:"0 0 8px"}}>Dificultad</p>
