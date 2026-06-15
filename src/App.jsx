@@ -816,7 +816,14 @@ function ImportView({ db, updateDb, genDiff, setGenDiff }) {
       const res = await fetch("/api/generate-questions", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ prompt })
+  body: JSON.stringify({
+    prompt,
+    fileBase64: b64,
+    fileName: pdfFile.name,
+    mimeType: isPdf
+      ? "application/pdf"
+      : "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  })
 });
 
 if (!res.ok) {
