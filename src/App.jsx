@@ -219,6 +219,17 @@ useEffect(() => {
   const [questionStart, setQuestionStart] = useState(null);
   const { save, load } = useStorage();
 
+  const ranking = Object.values(
+  sessions.reduce((acc, s) => {
+    const name = s.student;
+    if (!acc[name]) acc[name] = { name, points: 0 };
+    acc[name].points += s.points || 0;
+    return acc;
+  }, {})
+).sort((a, b) => b.points - a.points);
+
+const myRank = ranking.findIndex(r => r.name === studentName) + 1;
+const myPoints = ranking.find(r => r.name === studentName)?.points || 0;
   const availableTopics = [...new Set(db.map(q => q.topic).filter(Boolean))].sort();
   const poolSize = db.filter(q => {
     const diffOk  = filter==="todas" || q.difficulty===filter;
