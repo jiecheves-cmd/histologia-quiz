@@ -200,7 +200,6 @@ function LoginScreen({ users, onLogin }) {
 // ─── STUDENT MODE ─────────────────────────────────────────────────────────────
 function StudentMode({ db, studentName }) {
   const [sessions, setSessions] = useState([]);
-const { load } = useStorage();
 
 useEffect(() => {
   load("histo_sessions", [], true).then(setSessions);
