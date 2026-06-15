@@ -127,7 +127,7 @@ export default function App() {
   const canSuper   = role === "supervisor";
 
   return (
-    <div style={{fontFamily:"var(--font-sans)",maxWidth:800,margin:"0 auto",padding:"1rem 0"}}>
+    <div style={{fontFamily:"var(--font-sans)",maxWidth:1200,margin:"0 auto",padding:"1rem 0"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem",flexWrap:"wrap",gap:8}}>
         <div>
           <h2 style={{fontSize:19,fontWeight:600,margin:"0 0 2px",color:"var(--color-text-primary)"}}>HistoMind</h2>
