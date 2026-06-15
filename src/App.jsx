@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useStorage } from "./storage.js";
+import "./App.css";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const DIFFS = ["básico","intermedio","avanzado"];
