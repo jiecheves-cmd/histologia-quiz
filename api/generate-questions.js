@@ -4,7 +4,22 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { prompt } = req.body;
+    const { prompt, fileBase64, fileName, mimeType } = req.body;
+
+    const content = [];
+
+    if (fileBase64 && mimeType) {
+      content.push({
+        type: "input_file",
+        filename: fileName || "documento.pdf",
+        file_data: `data:${mimeType};base64,${fileBase64}`,
+      });
+    }
+
+    content.push({
+      type: "input_text",
+      text: prompt,
+    });
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -14,7 +29,12 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "gpt-4.1-mini",
-        input: prompt,
+        input: [
+          {
+            role: "user",
+            content,
+          },
+        ],
         temperature: 0.4,
       }),
     });
@@ -26,16 +46,12 @@ export default async function handler(req, res) {
     }
 
     const text =
-  data.output_text ||
-  data.output?.[0]?.content?.[0]?.text ||
-  "";
+      data.output_text ||
+      data.output?.[0]?.content?.[0]?.text ||
+      "";
 
-return res.status(200).json({
-  text
-});
+    return res.status(200).json({ text });
   } catch (error) {
-    return res.status(500).json({
-      error: error.message,
-    });
+    return res.status(500).json({ error: error.message });
   }
 }
