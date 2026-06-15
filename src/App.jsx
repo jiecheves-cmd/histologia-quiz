@@ -199,6 +199,12 @@ function LoginScreen({ users, onLogin }) {
 
 // ─── STUDENT MODE ─────────────────────────────────────────────────────────────
 function StudentMode({ db, studentName }) {
+  const [sessions, setSessions] = useState([]);
+const { load } = useStorage();
+
+useEffect(() => {
+  load("histo_sessions", [], true).then(setSessions);
+}, []);
   const [phase, setPhase]           = useState("config");
   const [filter, setFilter]         = useState("todas");
   const [selectedTopics, setSelectedTopics] = useState([]);
