@@ -299,7 +299,7 @@ save(seenKey, newSeen.length >= pool.length ? [] : newSeen);
 
   // Config
 if (phase==="config") return (
-  <div style={{display:"grid",gridTemplateColumns:"minmax(0,1.6fr) minmax(280px,0.8fr)",gap:24,alignItems:"start"}}>
+  <div style={{display:"grid",gridTemplateColumns:"minmax(0,2fr) 360px",gap:28,alignItems:"start"}}>
     
     {/* Panel principal */}
     <div style={{
@@ -320,10 +320,10 @@ if (phase==="config") return (
           margin:"0 0 10px",
           color:"var(--color-text-primary)"
         }}>
-          Prepara tu sesión de histología
+          🧠 Preparado para tu siguiente reto?
         </h1>
         <p style={{fontSize:15,color:"var(--color-text-secondary)",margin:0}}>
-          Hola, <strong style={{color:"var(--color-text-primary)"}}>{studentName}</strong>. Elige dificultad, temas y número de preguntas.
+          Hola, <strong style={{color:"var(--color-text-primary)"}}>{studentName}</strong>. Continúa mejorando tus conocimientos de histología con una sesión adaptada a tu nivel.
         </p>
       </div>
 
@@ -484,15 +484,37 @@ if (phase==="config") return (
           posición en el ranking
         </div>
         <div style={{
-          marginTop:18,
-          paddingTop:18,
-          borderTop:"1px solid rgba(255,255,255,0.25)",
-          fontSize:15,
-          fontWeight:800
-        }}>
-          {myPoints.toFixed(2)} puntos acumulados
-        </div>
-      </div>
+  marginTop:18,
+  paddingTop:18,
+  borderTop:"1px solid rgba(255,255,255,0.25)",
+  fontSize:15,
+  fontWeight:800
+}}>
+  {myPoints.toFixed(2)} puntos acumulados
+</div>
+
+<div style={{
+  marginTop:20,
+  background:"rgba(255,255,255,0.12)",
+  borderRadius:12,
+  overflow:"hidden"
+}}>
+  <div style={{
+    width:"65%",
+    height:10,
+    background:"#FFFFFF"
+  }} />
+</div>
+
+<div style={{
+  marginTop:8,
+  fontSize:12,
+  opacity:0.9
+}}>
+  ⭐ Nivel 4 · 420 / 600 XP
+</div>
+
+</div>
 
       <div style={{
         background:"rgba(255,255,255,0.9)",
