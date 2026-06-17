@@ -103,18 +103,40 @@ function SupervisionTag({ supervised }) {
 }
 
 // ─── APP ──────────────────────────────────────────────────────────────────────
+const LEVELS = [
+  { level: 1, title: "🔬 Aprendiz", xp: 0, coverage: 0 },
+  { level: 2, title: "🧫 Cazador de células", xp: 250, coverage: 5 },
+  { level: 3, title: "🧬 Explorador tisular", xp: 750, coverage: 10 },
+  { level: 4, title: "🔍 Detective celular", xp: 1500, coverage: 20 },
+  { level: 5, title: "📚 Maestro de la H&E", xp: 3000, coverage: 35 },
+  { level: 6, title: "🧠 Gurú histológico", xp: 6000, coverage: 50 },
+  { level: 7, title: "⚡ Dominador de tejidos", xp: 10000, coverage: 65 },
+  { level: 8, title: "🏛️ Sabio microscópico", xp: 16000, coverage: 80 },
+  { level: 9, title: "👑 Leyenda histológica", xp: 25000, coverage: 90 },
+  { level: 10, title: "🏆 Histomind Supremo", xp: 40000, coverage: 100 }
+];
 export default function App() {
   const [db, setDb]           = useState(DEFAULT_DB);
   const [users, setUsers]     = useState(DEFAULT_USERS);
+  const [sessions, setSessions] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [tab, setTab]         = useState("alumno");
   const [loaded, setLoaded]   = useState(false);
   const { save, load }        = useStorage();
 
-  useEffect(() => {
-    Promise.all([load("histo_db", DEFAULT_DB), load("histo_users", DEFAULT_USERS, true)])
-      .then(([d, u]) => { setDb(d); setUsers(u); setLoaded(true); });
-  }, []);
+useEffect(() => {
+  Promise.all([
+    load("histo_db", DEFAULT_DB),
+    load("histo_users", DEFAULT_USERS, true),
+    load("histo_sessions", [], true)
+  ])
+  .then(([d, u, s]) => {
+    setDb(d);
+    setUsers(u);
+    setSessions(s);
+    setLoaded(true);
+  });
+}, []);
 
   const updateDb    = nd => { setDb(nd);    save("histo_db", nd); };
   const updateUsers = nu => { setUsers(nu); save("histo_users", nu, true); };
@@ -230,6 +252,41 @@ useEffect(() => {
 
 const myRank = ranking.findIndex(r => r.name === studentName) + 1;
 const myPoints = ranking.find(r => r.name === studentName)?.points || 0;
+const histoXP = myPoints;
+const totalQuestions = db.length;
+
+const answeredQuestionIds = new Set(
+  sessions
+    .filter(s => s.student === studentName)
+    .flatMap(s => s.answers || [])
+    .map(a => a.questionId)
+    .filter(Boolean)
+);
+
+const answeredUnique = answeredQuestionIds.size;
+
+const coveragePct = totalQuestions
+  ? Math.round((answeredUnique / totalQuestions) * 100)
+  : 0;
+
+const currentLevel = LEVELS
+  .filter(l => histoXP >= l.xp && coveragePct >= l.coverage)
+  .at(-1) || LEVELS[0];
+
+const nextLevel = LEVELS.find(l => l.level === currentLevel.level + 1);
+
+const xpCurrent = currentLevel.xp;
+const xpNext = nextLevel ? nextLevel.xp : currentLevel.xp;
+const xpProgress = nextLevel
+  ? Math.min(100, Math.round(((histoXP - xpCurrent) / (xpNext - xpCurrent)) * 100))
+  : 100;
+  const xpMissing = nextLevel
+  ? Math.max(0, nextLevel.xp - histoXP)
+  : 0;
+
+const coverageMissing = nextLevel
+  ? Math.max(0, nextLevel.coverage - coveragePct)
+  : 0;
   const availableTopics = [...new Set(db.map(q => q.topic).filter(Boolean))].sort();
   const poolSize = db.filter(q => {
     const diffOk  = filter==="todas" || q.difficulty===filter;
@@ -490,7 +547,7 @@ if (phase==="config") return (
   fontSize:15,
   fontWeight:800
 }}>
-  {myPoints.toFixed(2)} puntos acumulados
+ 🧬 {histoXP.toFixed(2)} HistoXP acumulados
 </div>
 
 <div style={{
@@ -500,7 +557,7 @@ if (phase==="config") return (
   overflow:"hidden"
 }}>
   <div style={{
-    width:"65%",
+    width:`${xpProgress}%`,
     height:10,
     background:"#FFFFFF"
   }} />
@@ -511,9 +568,26 @@ if (phase==="config") return (
   fontSize:12,
   opacity:0.9
 }}>
-  ⭐ Nivel 4 · 420 / 600 XP
+  ⭐ Nivel {currentLevel.level} · {currentLevel.title}
 </div>
-
+<div style={{
+  marginTop:6,
+  fontSize:12,
+  opacity:0.9
+}}>
+  📚 Cobertura: {answeredUnique} / {totalQuestions} preguntas ({coveragePct}%)
+  {nextLevel && (
+  <div style={{
+    marginTop:6,
+    fontSize:12,
+    opacity:0.9
+  }}>
+    Siguiente: ⭐ Nivel {nextLevel.level} · {nextLevel.title}
+    <br />
+    Faltan {xpMissing.toFixed(0)} HistoXP y {coverageMissing}% de cobertura
+  </div>
+)}
+</div>
 </div>
 
       <div style={{
