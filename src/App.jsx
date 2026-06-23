@@ -280,6 +280,18 @@ const xpNext = nextLevel ? nextLevel.xp : currentLevel.xp;
 const xpProgress = nextLevel
   ? Math.min(100, Math.round(((histoXP - xpCurrent) / (xpNext - xpCurrent)) * 100))
   : 100;
+ const [streakDays, setStreakDays] = useState(0);
+
+useEffect(() => {
+  const lastSessionDate = localStorage.getItem("histo_last_session_" + studentName);
+  const streakCount = parseInt(localStorage.getItem("histo_streak_" + studentName) || "0");
+  if (!lastSessionDate) { setStreakDays(0); return; }
+  const last = new Date(lastSessionDate);
+  const today = new Date();
+  const diffDays = Math.floor((today - last) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0 || diffDays === 1) setStreakDays(streakCount);
+  else { setStreakDays(0); localStorage.setItem("histo_streak_" + studentName, "0"); }
+}, [studentName]); 
   const xpMissing = nextLevel
   ? Math.max(0, nextLevel.xp - histoXP)
   : 0;
@@ -349,7 +361,15 @@ save(seenKey, newSeen.length >= pool.length ? [] : newSeen);
       };
       const sessions = await load("histo_sessions", [], true);
       await save("histo_sessions", [...sessions, sessionData], true);
-      setPhase("results"); return;
+      const today = new Date().toISOString().split("T")[0];
+const lastDay = localStorage.getItem("histo_last_session_" + studentName);
+const currentStreak = parseInt(localStorage.getItem("histo_streak_" + studentName) || "0");
+const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+const newStreak = lastDay === today ? currentStreak : lastDay === yesterday ? currentStreak + 1 : 1;
+localStorage.setItem("histo_streak_" + studentName, String(newStreak));
+localStorage.setItem("histo_last_session_" + studentName, today);
+setStreakDays(newStreak);
+setPhase("results"); return;
     }
     setCurrent(c => c+1); setSelected(null); setConfidence(null); setConfirmed(false); setQuestionStart(Date.now());
   };
@@ -534,6 +554,24 @@ if (phase==="config") return (
         <div style={{fontSize:13,fontWeight:700,opacity:0.86,marginBottom:10}}>
           TU PROGRESO
         </div>
+        {streakDays > 0 && (
+  <div style={{
+    display:"flex", alignItems:"center", gap:10,
+    background:"rgba(255,255,255,0.12)",
+    border:"1px solid rgba(255,255,255,0.2)",
+    borderRadius:14, padding:"10px 14px", marginBottom:14
+  }}>
+    <span style={{fontSize:26}}>🔥</span>
+    <div>
+      <div style={{fontSize:11,fontWeight:600,opacity:0.7,textTransform:"uppercase",letterSpacing:"0.5px"}}>
+        Racha diaria
+      </div>
+      <div style={{fontSize:20,fontWeight:700,color:"#fff"}}>
+        {streakDays} día{streakDays !== 1 ? "s" : ""} seguido{streakDays !== 1 ? "s" : ""}
+      </div>
+    </div>
+  </div>
+)}
         <div style={{fontSize:42,fontWeight:900,lineHeight:1,letterSpacing:"-0.05em"}}>
           {myRank ? "#" + myRank : "—"}
         </div>
