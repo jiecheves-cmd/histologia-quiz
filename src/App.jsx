@@ -299,6 +299,75 @@ useEffect(() => {
 const coverageMissing = nextLevel
   ? Math.max(0, nextLevel.coverage - coveragePct)
   : 0;
+  // ─── SESIÓN INTELIGENTE ────────────────────────────────────────────────────────
+const buildSmartSession = async () => {
+  const allSessions = await load("histo_sessions", [], true);
+  const mySessions = allSessions.filter(s => s.student === studentName);
+  const myAnswers = mySessions.flatMap(s => s.answers || []);
+
+  // Contar aciertos y fallos por pregunta
+  const qStats = {};
+  myAnswers.forEach(a => {
+    if (!qStats[a.questionId]) qStats[a.questionId] = { correct: 0, total: 0, lowConf: 0 };
+    qStats[a.questionId].total++;
+    if (a.correct) qStats[a.questionId].correct++;
+    if (a.confidence === 2) qStats[a.questionId].lowConf++;
+  });
+
+  // Clasificar preguntas por prioridad
+  const never = db.filter(q => !qStats[q.id]);
+  const failed = db.filter(q => qStats[q.id] && (qStats[q.id].correct / qStats[q.id].total) < 0.5);
+  const lowConf = db.filter(q => qStats[q.id] && qStats[q.id].lowConf > 0 && !failed.find(f => f.id === q.id));
+  const rest = db.filter(q => qStats[q.id] && !failed.find(f => f.id === q.id) && !lowConf.find(f => f.id === q.id));
+
+  // Mezclar con prioridad y limitar a máx 3 por tema
+  const topicCount = {};
+  const pick = (pool) => pool.sort(() => Math.random() - 0.5).filter(q => {
+    topicCount[q.topic] = (topicCount[q.topic] || 0);
+    if (topicCount[q.topic] >= 3) return false;
+    topicCount[q.topic]++;
+    return true;
+  });
+
+  const selected = [
+    ...pick(failed),
+    ...pick(never),
+    ...pick(lowConf),
+    ...pick(rest)
+  ].slice(0, 10);
+
+  // Barajar opciones
+  return selected.map(q => {
+    const idx = q.options.map((opt, i) => ({ opt, correct: i === q.answer }));
+    idx.sort(() => Math.random() - 0.5);
+    return { ...q, options: idx.map(o => o.opt), answer: idx.findIndex(o => o.correct) };
+  });
+};
+
+const smartTopics = () => {
+  const allAnswers = sessions.flatMap(s => s.answers || []);
+  const topicStats = {};
+  db.forEach(q => { if (!topicStats[q.topic]) topicStats[q.topic] = { correct: 0, total: 0 }; });
+  allAnswers.forEach(a => {
+    const q = db.find(q => q.id === a.questionId);
+    if (!q) return;
+    if (!topicStats[q.topic]) topicStats[q.topic] = { correct: 0, total: 0 };
+    topicStats[q.topic].total++;
+    if (a.correct) topicStats[q.topic].correct++;
+  });
+  return Object.entries(topicStats)
+    .map(([topic, s]) => ({ topic, pct: s.total ? Math.round(s.correct / s.total * 100) : -1 }))
+    .sort((a, b) => a.pct - b.pct)
+    .slice(0, 3);
+};
+
+const startSmart = async () => {
+  const qs = await buildSmartSession();
+  if (!qs.length) return;
+  const now = Date.now();
+  setQuestions(qs); setCurrent(0); setSelected(null); setConfidence(null);
+  setConfirmed(false); setAnswers([]); setSessionStart(now); setQuestionStart(now); setPhase("quiz");
+};
   const availableTopics = [...new Set(db.map(q => q.topic).filter(Boolean))].sort();
   const poolSize = db.filter(q => {
     const diffOk  = filter==="todas" || q.difficulty===filter;
@@ -397,6 +466,47 @@ if (phase==="config") return (
           margin:"0 0 10px",
           color:"var(--color-text-primary)"
         }}>
+          {/* Sesión inteligente */}
+<div style={{
+  background:"linear-gradient(135deg,#1A1060,#6C4CFF)",
+  borderRadius:20,
+  padding:22,
+  marginBottom:24,
+  boxShadow:"0 12px 40px rgba(108,76,255,0.25)"
+}}>
+  <div style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.7)",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.5px"}}>
+    Sesión inteligente
+  </div>
+  <div style={{fontSize:22,fontWeight:800,color:"#fff",marginBottom:4}}>
+    🧠 10 preguntas adaptadas a ti
+  </div>
+  <div style={{fontSize:13,color:"rgba(255,255,255,0.75)",marginBottom:14}}>
+    Tus puntos más débiles de hoy:
+  </div>
+  <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:18}}>
+    {smartTopics().map((t,i) => (
+      <span key={i} style={{
+        fontSize:12, fontWeight:600,
+        padding:"5px 12px", borderRadius:20,
+        background: t.pct === -1 ? "rgba(255,255,255,0.15)" : t.pct < 50 ? "rgba(239,68,68,0.25)" : "rgba(245,158,11,0.25)",
+        color:"#fff",
+        border: t.pct === -1 ? "1px solid rgba(255,255,255,0.2)" : t.pct < 50 ? "1px solid rgba(239,68,68,0.4)" : "1px solid rgba(245,158,11,0.4)"
+      }}>
+        {t.pct === -1 ? "🆕" : t.pct < 50 ? "🔴" : "🟡"} {t.topic}
+      </span>
+    ))}
+  </div>
+  <button onClick={startSmart}
+    style={{
+      width:"100%", padding:"14px",
+      borderRadius:14, fontSize:15, fontWeight:800,
+      cursor:"pointer", border:"none",
+      background:"#fff", color:"#6C4CFF",
+      boxShadow:"0 4px 20px rgba(0,0,0,0.15)"
+    }}>
+    ⚡ Empezar ahora
+  </button>
+</div>
           🧠 Preparado para tu siguiente reto?
         </h1>
         <p style={{fontSize:15,color:"var(--color-text-secondary)",margin:0}}>
