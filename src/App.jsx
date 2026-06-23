@@ -224,7 +224,65 @@ function LoginScreen({ users, onLogin }) {
 </div>
   );
 }
+// ─── LIGA SEMANAL ─────────────────────────────────────────────────────────────
+function getWeekKey(date = new Date()) {
+  const d = new Date(date);
+  d.setHours(0,0,0,0);
+  d.setDate(d.getDate() - d.getDay() + 1); // Lunes
+  return d.toISOString().split("T")[0];
+}
 
+function getWeekLabel(weekKey) {
+  const start = new Date(weekKey);
+  const end = new Date(weekKey);
+  end.setDate(end.getDate() + 6);
+  const fmt = d => d.toLocaleDateString("es-ES", {day:"2-digit", month:"short"});
+  return fmt(start) + " – " + fmt(end);
+}
+
+function buildLeagueGroups(allSessions, allUsers, currentWeekKey) {
+  // XP global por alumno
+  const globalXP = {};
+  allSessions.forEach(s => {
+    if (!globalXP[s.student]) globalXP[s.student] = 0;
+    globalXP[s.student] += s.points || 0;
+  });
+
+  // XP esta semana por alumno
+  const weekXP = {};
+  allSessions
+    .filter(s => getWeekKey(new Date(s.date)) === currentWeekKey)
+    .forEach(s => {
+      if (!weekXP[s.student]) weekXP[s.student] = 0;
+      weekXP[s.student] += s.points || 0;
+    });
+
+  // Ordenar alumnos por XP global y agrupar de 20 en 20
+  const students = Object.keys(globalXP).sort((a,b) => globalXP[b] - globalXP[a]);
+  const groups = [];
+  for (let i = 0; i < students.length; i += 20) {
+    const group = students.slice(i, i + 20).map(name => ({
+      name,
+      globalXP: Math.round(globalXP[name]),
+      weekXP: Math.round(weekXP[name] || 0)
+    })).sort((a,b) => b.weekXP - a.weekXP);
+    groups.push(group);
+  }
+  return groups;
+}
+
+function saveHallOfFame(weekKey, winner, xp, save) {
+  const key = "histo_hall_of_fame";
+  const existing = JSON.parse(localStorage.getItem(key) || "[]");
+  if (existing.find(e => e.weekKey === weekKey)) return;
+  existing.push({ weekKey, winner, xp, label: getWeekLabel(weekKey) });
+  existing.sort((a,b) => b.weekKey.localeCompare(a.weekKey));
+  localStorage.setItem(key, JSON.stringify(existing));
+}
+
+function getHallOfFame() {
+  return JSON.parse(localStorage.getItem("histo_hall_of_fame") || "[]");
+}
 // ─── STUDENT MODE ─────────────────────────────────────────────────────────────
 function StudentMode({ db, studentName }) {
   const [sessions, setSessions] = useState([]);
@@ -232,6 +290,7 @@ function StudentMode({ db, studentName }) {
 useEffect(() => {
   load("histo_sessions", [], true).then(setSessions);
 }, []);
+  const [studentTab, setStudentTab] = useState("inicio");
   const [phase, setPhase]           = useState("config");
   const [filter, setFilter]         = useState("todas");
   const [selectedTopics, setSelectedTopics] = useState([]);
@@ -448,8 +507,37 @@ setPhase("results"); return;
     setCurrent(c => c+1); setSelected(null); setConfidence(null); setConfirmed(false); setQuestionStart(Date.now());
   };
 
-  // Config
-if (phase==="config") return (
+
+// ─── NAVEGACIÓN ALUMNO ────────────────────────────────────────────────────────
+if (phase === "config") {
+  const currentWeekKey = getWeekKey();
+  const allSessions = sessions;
+  const groups = buildLeagueGroups(allSessions, [], currentWeekKey);
+  const myGroup = groups.find(g => g.find(s => s.name === studentName)) || [];
+  const hallOfFame = getHallOfFame();
+
+  // Cerrar liga anterior si cambió la semana
+  const lastWeekKey = getWeekKey(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+  const lastWeekWinner = groups.find(g => g.find(s => s.name === studentName))?.[0];
+  if (lastWeekWinner) saveHallOfFame(lastWeekKey, lastWeekWinner.name, lastWeekWinner.weekXP, save);
+
+  return (
+    <div>
+      {/* Pestañas */}
+      <div style={{display:"flex",gap:8,marginBottom:24,borderBottom:"1px solid var(--color-border-tertiary)",paddingBottom:12}}>
+        {[["🏠 Inicio","inicio"],["🏆 Liga","liga"],["👑 Hall of Fame","hall"]].map(([l,v]) => (
+          <button key={v} onClick={() => setStudentTab(v)}
+            style={{padding:"7px 16px",borderRadius:20,fontSize:13,fontWeight:studentTab===v?700:400,cursor:"pointer",
+              background:studentTab===v?"#6C4CFF":"transparent",
+              color:studentTab===v?"#fff":"var(--color-text-secondary)",
+              border:studentTab===v?"none":"0.5px solid var(--color-border-tertiary)"}}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {/* INICIO */}
+      {studentTab==="inicio" && (
   <div style={{display:"grid",gridTemplateColumns:"minmax(0,2fr) 360px",gap:28,alignItems:"start"}}>
     
     {/* Panel principal */}
@@ -780,9 +868,89 @@ if (phase==="config") return (
       </div>
     </div>
   </div>
-);
+      )}
 
   // Results
+  )}
+
+      {/* LIGA SEMANAL */}
+      {studentTab==="liga" && (
+        <div>
+          <div style={{background:"linear-gradient(135deg,#1A1060,#6C4CFF)",borderRadius:20,padding:20,marginBottom:20,color:"#fff"}}>
+            <div style={{fontSize:12,fontWeight:700,opacity:0.7,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:4}}>Liga semanal</div>
+            <div style={{fontSize:20,fontWeight:800,marginBottom:4}}>{getWeekLabel(currentWeekKey)}</div>
+            <div style={{fontSize:13,opacity:0.8}}>Grupo de {myGroup.length} alumnos · Tu nivel de XP</div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {myGroup.map((s,i) => {
+              const isMe = s.name === studentName;
+              const medals = ["🥇","🥈","🥉"];
+              return (
+                <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",
+                  borderRadius:14,
+                  background:isMe?"#F0EAF9":"var(--color-background-primary)",
+                  border:"0.5px solid "+(isMe?"#C9A8F0":"var(--color-border-tertiary)"),
+                  fontWeight:isMe?600:400}}>
+                  <span style={{fontSize:i<3?22:14,minWidth:32,textAlign:"center"}}>
+                    {i<3?medals[i]:(i+1)+"."}
+                  </span>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,color:isMe?"#5B2D9E":"var(--color-text-primary)"}}>{s.name}{isMe?" (tú)":""}</div>
+                    <div style={{fontSize:11,color:"var(--color-text-secondary)"}}>XP global: {s.globalXP}</div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:16,fontWeight:700,color:isMe?"#7B4FBE":"var(--color-text-primary)"}}>{s.weekXP} XP</div>
+                    <div style={{fontSize:10,color:"var(--color-text-secondary)"}}>esta semana</div>
+                  </div>
+                </div>
+              );
+            })}
+            {myGroup.length === 0 && (
+              <div style={{padding:"2rem",textAlign:"center",color:"var(--color-text-secondary)",background:"var(--color-background-secondary)",borderRadius:14}}>
+                Completa tu primera sesión para entrar en la liga 🏆
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* HALL OF FAME */}
+      {studentTab==="hall" && (
+        <div>
+          <div style={{textAlign:"center",marginBottom:24}}>
+            <div style={{fontSize:40,marginBottom:8}}>👑</div>
+            <h2 style={{fontSize:22,fontWeight:800,color:"#1A1060",margin:"0 0 4px"}}>Hall of Fame</h2>
+            <p style={{fontSize:13,color:"var(--color-text-secondary)",margin:0}}>Ganadores de cada semana</p>
+          </div>
+          {hallOfFame.length === 0 ? (
+            <div style={{padding:"2rem",textAlign:"center",color:"var(--color-text-secondary)",background:"var(--color-background-secondary)",borderRadius:14}}>
+              Aún no hay ganadores registrados. ¡La primera liga está en curso!
+            </div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {hallOfFame.map((entry, i) => (
+                <div key={i} style={{display:"flex",alignItems:"center",gap:14,padding:"14px 18px",
+                  borderRadius:14,
+                  background:i===0?"linear-gradient(135deg,#FEF3DC,#FFF8E7)":"var(--color-background-primary)",
+                  border:"0.5px solid "+(i===0?"#E6A020":"var(--color-border-tertiary)")}}>
+                  <span style={{fontSize:i===0?32:20}}>{i===0?"👑":i===1?"🥈":"🥉"}</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:14,fontWeight:700,color:"var(--color-text-primary)"}}>{entry.winner}</div>
+                    <div style={{fontSize:12,color:"var(--color-text-secondary)"}}>{entry.label}</div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:18,fontWeight:800,color:"#BA7517"}}>{Math.round(entry.xp)} XP</div>
+                    <div style={{fontSize:10,color:"var(--color-text-secondary)"}}>esa semana</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
   if (phase==="results") {
     const correct = answers.filter(a => a.correct).length;
     const pct     = Math.round((correct/answers.length)*100);
