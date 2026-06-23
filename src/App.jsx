@@ -197,26 +197,31 @@ function LoginScreen({ users, onLogin }) {
     else setError("Usuario o contraseña incorrectos, o cuenta inactiva.");
   };
   return (
-    <div style={{fontFamily:"var(--font-sans)",maxWidth:380,margin:"3rem auto",padding:"0 1rem"}}>
-      <h2 style={{fontSize:20,fontWeight:600,marginBottom:4,color:"var(--color-text-primary)"}}>Quiz de Histología</h2>
-      <p style={{fontSize:13,color:"var(--color-text-secondary)",marginBottom:"1.75rem"}}>Introduce tus credenciales para acceder</p>
-      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
-        <input value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => e.key==="Enter"&&login()}
-          placeholder="Usuario"
-          style={{fontSize:14,padding:"10px 14px",borderRadius:"var(--border-radius-md)",
-            border:"0.5px solid var(--color-border-tertiary)",background:"var(--color-background-primary)",color:"var(--color-text-primary)"}} />
-        <input type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key==="Enter"&&login()}
-          placeholder="Contraseña"
-          style={{fontSize:14,padding:"10px 14px",borderRadius:"var(--border-radius-md)",
-            border:"0.5px solid var(--color-border-tertiary)",background:"var(--color-background-primary)",color:"var(--color-text-primary)"}} />
-      </div>
-      {error && <p style={{fontSize:12,color:"#C0392B",marginBottom:12}}>{error}</p>}
-      <button onClick={login}
-        style={{width:"100%",padding:"10px",borderRadius:"var(--border-radius-md)",fontSize:14,fontWeight:600,cursor:"pointer",
-          background:"var(--color-background-info)",color:"var(--color-text-info)",border:"0.5px solid var(--color-border-info)"}}>
-        Entrar
-      </button>
+   <div style={{fontFamily:"var(--font-sans)",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#1A1060 0%,#6C4CFF 50%,#A855F7 100%)",padding:"1rem"}}>
+  <div style={{width:"100%",maxWidth:400,background:"rgba(255,255,255,0.97)",borderRadius:24,padding:"36px 32px",boxShadow:"0 32px 80px rgba(26,16,96,0.35)"}}>
+    <div style={{textAlign:"center",marginBottom:28}}>
+      <div style={{fontSize:48,marginBottom:10}}>🔬</div>
+      <h1 style={{fontSize:30,fontWeight:800,margin:"0 0 6px",color:"#1A1060",letterSpacing:"-0.04em"}}>HistoMind</h1>
+      <p style={{fontSize:14,color:"#6C4CFF",fontWeight:600,margin:"0 0 4px"}}>Aprende histología de forma inteligente</p>
+      <p style={{fontSize:12,color:"#9CA3AF",margin:0}}>Introduce tus credenciales para acceder</p>
     </div>
+    <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
+      <input value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => e.key==="Enter"&&login()}
+        placeholder="Usuario"
+        style={{fontSize:14,padding:"12px 16px",borderRadius:12,border:"1.5px solid #E5E7EB",background:"#F9FAFB",color:"#1A1060",outline:"none"}} />
+      <input type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key==="Enter"&&login()}
+        placeholder="Contraseña"
+        style={{fontSize:14,padding:"12px 16px",borderRadius:12,border:"1.5px solid #E5E7EB",background:"#F9FAFB",color:"#1A1060",outline:"none"}} />
+    </div>
+    {error && <p style={{fontSize:12,color:"#C0392B",marginBottom:12}}>{error}</p>}
+    <button onClick={login}
+      style={{width:"100%",padding:"13px",borderRadius:12,fontSize:15,fontWeight:700,cursor:"pointer",
+        background:"linear-gradient(135deg,#1A1060,#6C4CFF)",color:"#fff",border:"none",
+        boxShadow:"0 8px 24px rgba(108,76,255,0.35)"}}>
+      Entrar
+    </button>
+  </div>
+</div>
   );
 }
 
