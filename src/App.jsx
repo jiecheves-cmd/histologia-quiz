@@ -870,9 +870,6 @@ if (phase === "config") {
   </div>
       )}
 
-  // Results
-  )}
-
       {/* LIGA SEMANAL */}
       {studentTab==="liga" && (
         <div>
