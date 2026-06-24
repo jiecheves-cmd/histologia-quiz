@@ -47,6 +47,48 @@ const DEFAULT_USERS = [
   {id:"u0",username:"supervisor",password:"1234",role:"supervisor",active:true,displayName:"Supervisor"},
 ];
 
+// ─── AVATARES ─────────────────────────────────────────────────────────────────
+function getInitials(name) {
+  const parts = name.trim().split(" ").filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function getAvatarColor(name) {
+  const colors = [
+    "#6C4CFF","#1D9E75","#E05C2A","#2A7AE0","#BA7517",
+    "#C0392B","#8E44AD","#16A085","#D35400","#2980B9",
+    "#27AE60","#E74C3C","#7D3C98","#1ABC9C","#F39C12"
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+}
+
+function getAvatarLabel(name, allUsers) {
+  const initials = getInitials(name);
+  const sameInitials = allUsers
+    .filter(u => getInitials(u.displayName) === initials)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const idx = sameInitials.findIndex(u => u.displayName === name);
+  return idx <= 0 ? initials : initials + (idx + 1);
+}
+
+function Avatar({ name, allUsers = [], size = 32 }) {
+  const label = allUsers.length > 0 ? getAvatarLabel(name, allUsers) : getInitials(name);
+  const color = getAvatarColor(name);
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: "50%",
+      background: color, color: "#fff",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: size * 0.35, fontWeight: 700, flexShrink: 0,
+      letterSpacing: "-0.5px"
+    }}>
+      {label}
+    </div>
+  );
+}
 // ─── SCORING ──────────────────────────────────────────────────────────────────
 function calcSessionScore(answers) {
   let points = 0, streak = 0, bonuses = 0;
@@ -161,7 +203,8 @@ useEffect(() => {
   </div>
 </div>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontSize:13,color:"var(--color-text-secondary)"}}>{currentUser.displayName}</span>
+            <Avatar name={currentUser.displayName} allUsers={users} size={32} />
+<span style={{fontSize:13,color:"var(--color-text-secondary)"}}>{currentUser.displayName}</span>
             <Badge role={role} />
           </div>
         </div>
@@ -864,6 +907,7 @@ if (phase === "config") {
                   <span style={{fontSize:i<3?22:14,minWidth:32,textAlign:"center"}}>
                     {i<3?medals[i]:(i+1)+"."}
                   </span>
+                  <Avatar name={s.name} size={30} />
                   <div style={{flex:1}}>
                     <div style={{fontSize:13,color:isMe?"#5B2D9E":"var(--color-text-primary)"}}>{s.name}{isMe?" (tú)":""}</div>
                     <div style={{fontSize:11,color:"var(--color-text-secondary)"}}>XP global: {s.globalXP}</div>
@@ -1188,6 +1232,7 @@ function ResultsWithRanking({ studentName, answers, questions, sessionStart, cor
                   border:"0.5px solid "+(isMe?"#C9A8F0":"var(--color-border-tertiary)"),
                   fontWeight:isMe?600:400}}>
                   <span style={{fontSize:i<3?16:12,minWidth:28,textAlign:"center"}}>{i<3?medals[i]:(i+1)+"."}</span>
+                  <Avatar name={r.name} size={28} />
                   <span style={{flex:1,fontSize:13,color:isMe?"#5B2D9E":"var(--color-text-primary)"}}>{r.name}{isMe?" (tú)":""}</span>
                   <span style={{fontSize:13,fontWeight:600,color:"#7B4FBE"}}>{r.points>0?"+":""}{r.points} pts</span>
                 </div>
