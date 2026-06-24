@@ -149,10 +149,17 @@ useEffect(() => {
   const canSuper   = role === "supervisor";
 
   return (
-    <div style={{fontFamily:"var(--font-sans)",maxWidth:1200,margin:"0 auto",padding:"1rem 0"}}>
+    <div style={{fontFamily:"var(--font-sans)",maxWidth:1200,margin:"0 auto",padding:"1rem 0",minHeight:"100vh",background:"radial-gradient(ellipse at 20% 50%, rgba(108,76,255,0.06) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(168,85,247,0.05) 0%, transparent 50%)",position:"relative"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem",flexWrap:"wrap",gap:8}}>
         <div>
-          <h2 style={{fontSize:19,fontWeight:600,margin:"0 0 2px",color:"var(--color-text-primary)"}}>HistoMind</h2>
+          
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+  <span style={{fontSize:28}}>🔬</span>
+  <div>
+    <h1 style={{fontSize:24,fontWeight:800,margin:0,color:"#1A1060",letterSpacing:"-0.03em"}}>HistoMind</h1>
+    <p style={{fontSize:11,margin:0,color:"#6C4CFF",fontWeight:600,letterSpacing:"0.3px"}}>QUIZ DE HISTOLOGÍA</p>
+  </div>
+</div>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
             <span style={{fontSize:13,color:"var(--color-text-secondary)"}}>{currentUser.displayName}</span>
             <Badge role={role} />
@@ -831,41 +838,7 @@ if (phase === "config") {
 </div>
 </div>
 
-      <div style={{
-        background:"rgba(255,255,255,0.9)",
-        border:"1px solid rgba(255,255,255,0.95)",
-        borderRadius:28,
-        padding:22,
-        boxShadow:"0 18px 50px rgba(44,39,80,0.10)"
-      }}>
-        <div style={{fontSize:13,fontWeight:800,color:"var(--color-text-primary)",marginBottom:14}}>
-          Resumen de la sesión
-        </div>
-
-        <div style={{display:"grid",gap:12}}>
-          <div style={{display:"flex",justifyContent:"space-between",gap:12}}>
-            <span style={{color:"var(--color-text-secondary)",fontSize:13}}>Dificultad</span>
-            <strong style={{fontSize:13,textTransform:"capitalize"}}>{filter}</strong>
-          </div>
-
-          <div style={{display:"flex",justifyContent:"space-between",gap:12}}>
-            <span style={{color:"var(--color-text-secondary)",fontSize:13}}>Temas</span>
-            <strong style={{fontSize:13}}>
-              {selectedTopics.length===0 ? "Todos" : selectedTopics.length}
-            </strong>
-          </div>
-
-          <div style={{display:"flex",justifyContent:"space-between",gap:12}}>
-            <span style={{color:"var(--color-text-secondary)",fontSize:13}}>Preguntas</span>
-            <strong style={{fontSize:13}}>{numQ}</strong>
-          </div>
-
-          <div style={{display:"flex",justifyContent:"space-between",gap:12}}>
-            <span style={{color:"var(--color-text-secondary)",fontSize:13}}>Disponibles</span>
-            <strong style={{fontSize:13}}>{poolSize}</strong>
-          </div>
-        </div>
-      </div>
+      
     </div>
   </div>
       )}
