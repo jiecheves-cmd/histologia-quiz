@@ -1726,17 +1726,19 @@ const text = data.text;
 
   // ── Stats ──
   if (view==="stats") {
-    const allA        = sessions.flatMap(s => s.answers||[]);
-    const students    = [...new Set(sessions.map(s => s.student))];
-    const totalTime   = sessions.reduce((a,s) => a+(s.durationMs||0), 0);
+    const allA = sessions.flatMap(s => s.answers||[]);
+    const students = [...new Set(sessions.map(s => s.student))];
+    const totalTime = sessions.reduce((a,s) => a+(s.durationMs||0), 0);
+    const supervised = db.filter(q => q.supervised).length;
+
     const qStats = {};
     allA.forEach(a => {
-      if (!qStats[a.questionId]) qStats[a.questionId]={question:a.question,difficulty:a.difficulty,total:0,correct:0,conf:[0,0,0]};
+      if (!qStats[a.questionId]) qStats[a.questionId]={question:a.question,difficulty:a.difficulty,topic:a.topic||"",total:0,correct:0};
       qStats[a.questionId].total++;
       if (a.correct) qStats[a.questionId].correct++;
-      if (a.confidence!=null) qStats[a.questionId].conf[a.confidence]++;
     });
     const qList = Object.values(qStats).sort((a,b) => (a.correct/a.total)-(b.correct/b.total));
+
     const stuStats = {};
     sessions.forEach(s => {
       if (!stuStats[s.student]) stuStats[s.student]={name:s.student,sessions:0,totalTime:0,correct:0,total:0};
@@ -1744,107 +1746,140 @@ const text = data.text;
       stuStats[s.student].totalTime += s.durationMs||0;
       (s.answers||[]).forEach(a => { stuStats[s.student].total++; if (a.correct) stuStats[s.student].correct++; });
     });
-    const stuList    = Object.values(stuStats).sort((a,b) => b.sessions-a.sessions);
-    const confTotals = [0,1,2].map(i => allA.filter(a => a.confidence===i).length);
-    const confCorrect= [0,1,2].map(i => allA.filter(a => a.confidence===i&&a.correct).length);
-    const supervised = db.filter(q => q.supervised).length;
+    const stuList = Object.values(stuStats).sort((a,b) => b.sessions-a.sessions);
+
+    const topicStats = {};
+    db.forEach(q => { if (!topicStats[q.topic]) topicStats[q.topic]={topic:q.topic,correct:0,total:0}; });
+    allA.forEach(a => {
+      const q = db.find(x => x.id===a.questionId);
+      if (!q) return;
+      if (!topicStats[q.topic]) topicStats[q.topic]={topic:q.topic,correct:0,total:0};
+      topicStats[q.topic].total++;
+      if (a.correct) topicStats[q.topic].correct++;
+    });
+    const topicList = Object.values(topicStats).filter(t=>t.total>0).sort((a,b)=>(a.correct/a.total)-(b.correct/b.total));
+
+    const globalPct = allA.length ? Math.round(allA.filter(a=>a.correct).length/allA.length*100) : 0;
+    const criticalQs = qList.filter(q => Math.round(q.correct/q.total*100) < 40).length;
 
     return (
       <div>
         <Nav />
-        <div style={{display:"flex",gap:8,marginBottom:"1rem",padding:"10px 14px",borderRadius:"var(--border-radius-md)",
+
+        {/* Supervisión */}
+        <div style={{display:"flex",gap:8,marginBottom:16,padding:"10px 14px",borderRadius:"var(--border-radius-md)",
           background:"#F0EAF9",border:"0.5px solid #C9A8F0",fontSize:13,alignItems:"center"}}>
           <span><strong>{supervised}/{db.length}</strong> preguntas supervisadas</span>
           <div style={{flex:1,height:6,borderRadius:3,background:"#ddd",overflow:"hidden",marginLeft:8}}>
             <div style={{width:(db.length?supervised/db.length*100:0)+"%",height:"100%",background:"#7B4FBE",borderRadius:3}} />
           </div>
         </div>
+
         {sessions.length===0
           ? <div style={{padding:"2rem",textAlign:"center",color:"var(--color-text-secondary)",background:"var(--color-background-secondary)",borderRadius:"var(--border-radius-md)"}}>Sin datos de sesiones aún.</div>
           : (<>
-            <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:"1.5rem"}}>
-              {[[sessions.length+"","Sesiones","#378ADD"],[students.length+"","Alumnos","#1D9E75"],
-                [fmt(totalTime),"Tiempo total","#BA7517"],
-                [Math.round(allA.filter(a=>a.correct).length/Math.max(allA.length,1)*100)+"%","Acierto global","#7B4FBE"]
-              ].map(([v,l,c]) => (
-                <div key={l} style={{flex:1,minWidth:100,background:"var(--color-background-secondary)",borderRadius:"var(--border-radius-md)",padding:"12px 14px"}}>
+            {/* Métricas */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
+              {[
+                [sessions.length,"Sesiones totales","#378ADD",""],
+                [students.length,"Alumnos activos","#1D9E75","de "+students.length+" en ranking"],
+                [globalPct+"%","Acierto global",globalPct>=70?"#1D9E75":globalPct>=40?"#BA7517":"#C0392B",""],
+                [criticalQs,"Preguntas críticas","#E24B4A","menos del 40% acierto"]
+              ].map(([v,l,c,sub]) => (
+                <div key={l} style={{background:"var(--color-background-secondary)",borderRadius:"var(--border-radius-md)",padding:"12px 14px"}}>
                   <div style={{fontSize:11,color:"var(--color-text-secondary)",marginBottom:4}}>{l}</div>
-                  <div style={{fontSize:22,fontWeight:700,color:c}}>{v}</div>
+                  <div style={{fontSize:22,fontWeight:500,color:c}}>{v}</div>
+                  {sub && <div style={{fontSize:11,color:"var(--color-text-secondary)",marginTop:2}}>{sub}</div>}
                 </div>
               ))}
             </div>
-            <div style={{background:"var(--color-background-secondary)",borderRadius:"var(--border-radius-md)",padding:"14px 16px",marginBottom:"1.25rem"}}>
-              <p style={{fontSize:13,fontWeight:600,margin:"0 0 12px"}}>Seguridad vs Acierto</p>
-              <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                {[0,1,2].map(i => (
-                  <div key={i} style={{flex:1,minWidth:90,background:"var(--color-background-primary)",borderRadius:"var(--border-radius-md)",padding:"10px 12px",borderLeft:"3px solid "+CONFIDENCE[i].color}}>
-                    <div style={{fontSize:12,fontWeight:600,color:CONFIDENCE[i].color,marginBottom:6}}>{CONFIDENCE[i].icon} {CONFIDENCE[i].label}</div>
-                    <div style={{fontSize:11,color:"var(--color-text-secondary)"}}>Resp: <strong>{confTotals[i]}</strong></div>
-                    <div style={{fontSize:11,color:"var(--color-text-secondary)"}}>Acierto: <strong style={{color:CONFIDENCE[i].color}}>{confTotals[i]?Math.round(confCorrect[i]/confTotals[i]*100):0}%</strong></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div style={{background:"var(--color-background-secondary)",borderRadius:"var(--border-radius-md)",padding:"14px 16px",marginBottom:"1.25rem"}}>
-              <p style={{fontSize:13,fontWeight:600,margin:"0 0 12px"}}>Preguntas más falladas</p>
-              {qList.slice(0,5).map((q,i) => {
+
+            {/* Preguntas más falladas */}
+            <div style={{background:"var(--color-background-primary)",border:"0.5px solid var(--color-border-tertiary)",borderRadius:"var(--border-radius-lg)",padding:"1rem 1.25rem",marginBottom:16}}>
+              <p style={{fontSize:13,fontWeight:500,margin:"0 0 14px",color:"var(--color-text-primary)"}}>Preguntas más falladas</p>
+              {qList.slice(0,8).map((q,i) => {
                 const pct = Math.round(q.correct/q.total*100);
-                const ds  = diffStyle(q.difficulty);
+                const isRed = pct < 40;
+                const isAmber = pct >= 40 && pct < 60;
+                const color = isRed?"#E24B4A":isAmber?"#EF9F27":"#639922";
+                const badgeBg = isRed?"#FCEBEB":isAmber?"#FAEEDA":"#EAF3DE";
+                const badgeColor = isRed?"#A32D2D":isAmber?"#854F0B":"#3B6D11";
+                const badgeText = isRed?"Crítica":isAmber?"Revisar":"OK";
                 return (
-                  <div key={i} style={{marginBottom:10,paddingBottom:10,borderBottom:i<4?"0.5px solid var(--color-border-tertiary)":"none"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",gap:8,marginBottom:4}}>
-                      <span style={{fontSize:13,flex:1,lineHeight:1.4}}>{q.question}</span>
-                      <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:4,background:ds.bg,color:ds.color,flexShrink:0}}>{q.difficulty}</span>
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                    <div style={{fontSize:12,color:"var(--color-text-secondary)",width:180,flexShrink:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}
+                      title={q.question}>{q.question}</div>
+                    <div style={{flex:1,height:8,background:"var(--color-background-secondary)",borderRadius:4,overflow:"hidden"}}>
+                      <div style={{width:pct+"%",height:"100%",background:color,borderRadius:4}} />
                     </div>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <div style={{flex:1,height:6,borderRadius:3,background:"var(--color-border-tertiary)",overflow:"hidden"}}>
-                        <div style={{width:pct+"%",height:"100%",background:pct>=70?"#1D9E75":pct>=40?"#F5C518":"#C0392B",borderRadius:3}} />
-                      </div>
-                      <span style={{fontSize:12,fontWeight:600,color:pct>=70?"#1D9E75":pct>=40?"#BA7517":"#C0392B",minWidth:36}}>{pct}%</span>
-                      <span style={{fontSize:11,color:"var(--color-text-secondary)"}}>{q.total} resp.</span>
-                    </div>
+                    <div style={{fontSize:12,fontWeight:500,color:color,width:36,textAlign:"right"}}>{pct}%</div>
+                    <span style={{fontSize:10,padding:"2px 8px",borderRadius:10,fontWeight:500,background:badgeBg,color:badgeColor,flexShrink:0}}>{badgeText}</span>
                   </div>
                 );
               })}
             </div>
-            <div style={{background:"var(--color-background-secondary)",borderRadius:"var(--border-radius-md)",padding:"14px 16px",marginBottom:"1.25rem"}}>
-              <p style={{fontSize:13,fontWeight:600,margin:"0 0 12px"}}>Alumnos</p>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                <thead>
-                  <tr style={{color:"var(--color-text-secondary)",fontSize:11}}>
-                    {["Alumno","Sesiones","Tiempo","Acierto"].map(h => <th key={h} style={{textAlign:"left",padding:"4px 8px",fontWeight:500}}>{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {stuList.map((s,i) => {
-                    const pct = s.total ? Math.round(s.correct/s.total*100) : 0;
-                    return (
-                      <tr key={i} style={{borderTop:"0.5px solid var(--color-border-tertiary)"}}>
-                        <td style={{padding:"8px",fontWeight:500}}>{s.name}</td>
-                        <td style={{padding:"8px",color:"var(--color-text-secondary)"}}>{s.sessions}</td>
-                        <td style={{padding:"8px",color:"var(--color-text-secondary)"}}>{fmt(s.totalTime)}</td>
-                        <td style={{padding:"8px",fontWeight:600,color:pct>=70?"#1D9E75":pct>=40?"#BA7517":"#C0392B"}}>{pct}%</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+
+            {/* Temas con dificultad */}
+            <div style={{background:"var(--color-background-primary)",border:"0.5px solid var(--color-border-tertiary)",borderRadius:"var(--border-radius-lg)",padding:"1rem 1.25rem",marginBottom:16}}>
+              <p style={{fontSize:13,fontWeight:500,margin:"0 0 12px",color:"var(--color-text-primary)"}}>Rendimiento por tema</p>
+              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                {topicList.map((t,i) => {
+                  const pct = Math.round(t.correct/t.total*100);
+                  const isRed = pct < 40;
+                  const isAmber = pct >= 40 && pct < 60;
+                  const bg = isRed?"#FCEBEB":isAmber?"#FAEEDA":"#EAF3DE";
+                  const color = isRed?"#A32D2D":isAmber?"#854F0B":"#3B6D11";
+                  const border = isRed?"#F09595":isAmber?"#FAC775":"#C0DD97";
+                  return (
+                    <span key={i} style={{fontSize:12,padding:"4px 10px",borderRadius:10,
+                      background:bg,color:color,border:"0.5px solid "+border}}>
+                      {t.topic} — {pct}%
+                    </span>
+                  );
+                })}
+              </div>
             </div>
-            <div style={{background:"var(--color-background-secondary)",borderRadius:"var(--border-radius-md)",padding:"14px 16px"}}>
-              <p style={{fontSize:13,fontWeight:600,margin:"0 0 12px"}}>Historial de sesiones</p>
+
+            {/* Progreso individual */}
+            <div style={{background:"var(--color-background-primary)",border:"0.5px solid var(--color-border-tertiary)",borderRadius:"var(--border-radius-lg)",padding:"1rem 1.25rem",marginBottom:16}}>
+              <p style={{fontSize:13,fontWeight:500,margin:"0 0 12px",color:"var(--color-text-primary)"}}>Progreso individual</p>
+              {stuList.map((s,i) => {
+                const pct = s.total ? Math.round(s.correct/s.total*100) : 0;
+                const color = pct>=70?"#1D9E75":pct>=40?"#EF9F27":"#E24B4A";
+                return (
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",
+                    borderBottom:i<stuList.length-1?"0.5px solid var(--color-border-tertiary)":"none"}}>
+                    <Avatar name={s.name} size={28} />
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,color:"var(--color-text-primary)",marginBottom:3}}>{s.name}</div>
+                      <div style={{height:4,background:"var(--color-background-secondary)",borderRadius:2,overflow:"hidden"}}>
+                        <div style={{width:pct+"%",height:"100%",background:color,borderRadius:2}} />
+                      </div>
+                    </div>
+                    <div style={{fontSize:12,fontWeight:500,color:color,minWidth:36,textAlign:"right"}}>{pct}%</div>
+                    <span style={{fontSize:11,color:"var(--color-text-secondary)",minWidth:60,textAlign:"right"}}>{s.sessions} sesiones</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Historial */}
+            <div style={{background:"var(--color-background-primary)",border:"0.5px solid var(--color-border-tertiary)",borderRadius:"var(--border-radius-lg)",padding:"1rem 1.25rem"}}>
+              <p style={{fontSize:13,fontWeight:500,margin:"0 0 12px",color:"var(--color-text-primary)"}}>Historial de sesiones</p>
               {[...sessions].reverse().slice(0,10).map((s,i) => {
                 const ans = s.answers||[];
-                const ok  = ans.filter(a => a.correct).length;
+                const ok = ans.filter(a=>a.correct).length;
                 const pct = ans.length ? Math.round(ok/ans.length*100) : 0;
                 return (
                   <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",
-                    borderRadius:"var(--border-radius-md)",background:"var(--color-background-primary)",fontSize:13,marginBottom:6}}>
-                    <span style={{flex:1,fontWeight:500}}>{s.student}</span>
+                    borderRadius:"var(--border-radius-md)",background:"var(--color-background-secondary)",fontSize:13,marginBottom:6}}>
+                    <Avatar name={s.student} size={24} />
+                    <span style={{flex:1,fontWeight:500,fontSize:13}}>{s.student}</span>
                     <span style={{color:"var(--color-text-secondary)",fontSize:12}}>
                       {new Date(s.date).toLocaleDateString("es-ES",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}
                     </span>
                     <span style={{color:"var(--color-text-secondary)",fontSize:12}}>{fmt(s.durationMs||0)}</span>
-                    <span style={{fontSize:12,fontWeight:600,padding:"2px 10px",borderRadius:10,
+                    <span style={{fontSize:12,fontWeight:500,padding:"2px 10px",borderRadius:10,
                       background:pct>=70?"#E1F5EE":pct>=40?"#FEF3DC":"#FAECE7",
                       color:pct>=70?"#0F6E56":pct>=40?"#7A4A00":"#993C1D"}}>
                       {pct}% · {ans.length}p
