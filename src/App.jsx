@@ -414,7 +414,46 @@ const coverageMissing = nextLevel
   ? Math.max(0, nextLevel.coverage - coveragePct)
   : 0;
   // ─── SESIÓN INTELIGENTE ────────────────────────────────────────────────────────
-const buildSmartSession = async () => {
+// ─── RADAR CHART ──────────────────────────────────────────────────────────────
+useEffect(() => {
+  if (studentTab !== "inicio" || phase !== "config") return;
+  const script = document.createElement("script");
+  script.src = "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js";
+  script.onload = () => {
+    const canvas = document.getElementById("radarChart");
+    if (!canvas) return;
+    if (canvas._chartInstance) canvas._chartInstance.destroy();
+    const allAnswers = sessions.flatMap(s => s.answers || []);
+    const topicData = {};
+    db.forEach(q => { if (!topicData[q.topic]) topicData[q.topic] = {correct:0,total:0}; });
+    allAnswers.forEach(a => {
+      const q = db.find(x => x.id === a.questionId);
+      if (!q || !topicData[q.topic]) return;
+      topicData[q.topic].total++;
+      if (a.correct) topicData[q.topic].correct++;
+    });
+    const topics = Object.keys(topicData).slice(0, 8);
+    const values = topics.map(t => topicData[t].total ? Math.round(topicData[t].correct/topicData[t].total*100) : 0);
+    const chart = new window.Chart(canvas, {
+      type: "radar",
+      data: {
+        labels: topics,
+        datasets: [
+          { label:"Tu nivel", data:values, backgroundColor:"rgba(108,76,255,0.2)", borderColor:"#6C4CFF", borderWidth:2, pointBackgroundColor:"#6C4CFF", pointRadius:4 },
+          { label:"Máximo", data:topics.map(()=>100), backgroundColor:"rgba(108,76,255,0.05)", borderColor:"rgba(108,76,255,0.2)", borderWidth:1, pointRadius:0 }
+        ]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false } },
+        scales:{ r:{ min:0, max:100, ticks:{ stepSize:25, font:{size:10}, color:"#9CA3AF", backdropColor:"transparent" }, pointLabels:{ font:{size:10}, color:"#6B7280" }, grid:{ color:"rgba(108,76,255,0.1)" }, angleLines:{ color:"rgba(108,76,255,0.15)" } } }
+      }
+    });
+    canvas._chartInstance = chart;
+  };
+  document.head.appendChild(script);
+}, [studentTab, phase, sessions, db]);
+  const buildSmartSession = async () => {
   const allSessions = await load("histo_sessions", [], true);
   const mySessions = allSessions.filter(s => s.student === studentName);
   const myAnswers = mySessions.flatMap(s => s.answers || []);
@@ -650,6 +689,8 @@ if (phase === "config") {
     ⚡ Empezar ahora
   </button>
 </div>
+
+
           🧠 Preparado para tu siguiente reto?
         </h1>
         <p style={{fontSize:15,color:"var(--color-text-secondary)",margin:0}}>
@@ -881,7 +922,22 @@ if (phase === "config") {
 </div>
 </div>
 
-      
+      {/* Radar de dominio */}
+      <div style={{background:"var(--color-background-primary)",border:"0.5px solid var(--color-border-tertiary)",borderRadius:20,padding:"1.25rem"}}>
+        <p style={{fontSize:13,fontWeight:500,color:"var(--color-text-primary)",margin:"0 0 4px"}}>Tu mapa de dominio</p>
+        <p style={{fontSize:12,color:"var(--color-text-secondary)",margin:"0 0 1rem"}}>Nivel por área histológica</p>
+        <div style={{position:"relative",width:"100%",height:260}}>
+          <canvas id="radarChart" role="img" aria-label="Gráfico radar de dominio por tejido"></canvas>
+        </div>
+        <div style={{display:"flex",gap:12,marginTop:12}}>
+          <span style={{fontSize:11,display:"flex",alignItems:"center",gap:4,color:"var(--color-text-secondary)"}}>
+            <span style={{width:10,height:10,borderRadius:2,background:"rgba(108,76,255,0.5)",display:"inline-block"}}></span>Tu nivel
+          </span>
+          <span style={{fontSize:11,display:"flex",alignItems:"center",gap:4,color:"var(--color-text-secondary)"}}>
+            <span style={{width:10,height:10,borderRadius:2,background:"rgba(108,76,255,0.15)",display:"inline-block"}}></span>Máximo
+          </span>
+        </div>
+      </div>
     </div>
   </div>
       )}
