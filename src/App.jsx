@@ -1040,6 +1040,7 @@ if (phase === "config") {
         ptAciertos={ptAciertos}
         ptErrores={ptErrores}
         onNewSession={()=>setPhase("config")}
+        onRepeat={()=>{setPhase("quiz"); setCurrent(0); setSelected(null); setConfidence(null); setConfirmed(false); setAnswers([]); setSessionStart(Date.now()); setQuestionStart(Date.now());}}
       />
     );
   }
@@ -1173,7 +1174,7 @@ if (phase === "config") {
 }
 
 // ─── RESULTS WITH RANKING ─────────────────────────────────────────────────────
-function ResultsWithRanking({ studentName, answers, questions, sessionStart, correct, pct, points, bonuses, ptAciertos, ptErrores, onNewSession }) {
+function ResultsWithRanking({ studentName, answers, questions, sessionStart, correct, pct, points, bonuses, ptAciertos, ptErrores, onNewSession, onRepeat }) {
   const [sessions, setSessions] = useState([]);
   const [rankPeriod, setRankPeriod] = useState("week");
   const { load } = useStorage();
@@ -1321,11 +1322,18 @@ function ResultsWithRanking({ studentName, answers, questions, sessionStart, cor
             correct={answers[i]?.correct} confidence={answers[i]?.confidence} idx={i} />
         ))}
       </div>
-      <button onClick={onNewSession}
-        style={{padding:"7px 20px",borderRadius:"var(--border-radius-md)",fontSize:13,cursor:"pointer",
-          background:"transparent",color:"var(--color-text-primary)",border:"0.5px solid var(--color-border-tertiary)"}}>
-        Nueva sesión
-      </button>
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={onNewSession}
+          style={{flex:1,padding:"10px 20px",borderRadius:"var(--border-radius-md)",fontSize:13,fontWeight:500,cursor:"pointer",
+            background:"linear-gradient(135deg,#1A1060,#6C4CFF)",color:"#fff",border:"none"}}>
+          ← Volver al inicio
+        </button>
+        <button onClick={onRepeat}
+          style={{flex:1,padding:"10px 20px",borderRadius:"var(--border-radius-md)",fontSize:13,fontWeight:500,cursor:"pointer",
+            background:"transparent",color:"var(--color-text-primary)",border:"0.5px solid var(--color-border-tertiary)"}}>
+          🔁 Repetir sesión
+        </button>
+      </div>
     </div>
   );
 }
