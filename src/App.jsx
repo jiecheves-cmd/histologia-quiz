@@ -1643,6 +1643,8 @@ function TeacherMode({ db, updateDb, isSupervisor }) {
   const [genMsg, setGenMsg]         = useState("");
   const [confirmDelete, setConfirmDelete]   = useState(null);
   const [filterSupervised, setFilterSupervised] = useState("todas");
+  const [activeFilter, setActiveFilter] = useState("todos");
+const [showAll, setShowAll] = useState(false);
   const [filterTopic, setFilterTopic]           = useState("todos");
   const [rankPeriod, setRankPeriod]             = useState("week");
   const [form, setForm] = useState({difficulty:"básico",topic:TOPICS[0],question:"",options:["","","",""],answer:0,explanation:"",image:null});
@@ -1840,28 +1842,81 @@ const text = data.text;
               </div>
             </div>
 
-            {/* Progreso individual */}
-            <div style={{background:"var(--color-background-primary)",border:"0.5px solid var(--color-border-tertiary)",borderRadius:"var(--border-radius-lg)",padding:"1rem 1.25rem",marginBottom:16}}>
-              <p style={{fontSize:13,fontWeight:500,margin:"0 0 12px",color:"var(--color-text-primary)"}}>Progreso individual</p>
-              {stuList.map((s,i) => {
-                const pct = s.total ? Math.round(s.correct/s.total*100) : 0;
-                const color = pct>=70?"#1D9E75":pct>=40?"#EF9F27":"#E24B4A";
-                return (
-                  <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",
-                    borderBottom:i<stuList.length-1?"0.5px solid var(--color-border-tertiary)":"none"}}>
-                    <Avatar name={s.name} size={28} />
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:13,color:"var(--color-text-primary)",marginBottom:3}}>{s.name}</div>
-                      <div style={{height:4,background:"var(--color-background-secondary)",borderRadius:2,overflow:"hidden"}}>
-                        <div style={{width:pct+"%",height:"100%",background:color,borderRadius:2}} />
-                      </div>
+            {/* Progreso individual con percentiles */}
+            {(() => {
+              const LEVELS = [
+                {key:"critico",label:"🔴 Crítico",min:0,max:25,bg:"#FCEBEB",color:"#A32D2D",border:"#F09595"},
+                {key:"riesgo",label:"🟠 En riesgo",min:25,max:50,bg:"#FEF0E7",color:"#C05C1A",border:"#FAB87A"},
+                {key:"progreso",label:"🟡 En progreso",min:50,max:75,bg:"#FAEEDA",color:"#854F0B",border:"#FAC775"},
+                {key:"destacado",label:"🟢 Destacado",min:75,max:100,bg:"#EAF3DE",color:"#3B6D11",border:"#C0DD97"},
+              ];
+              const sorted = [...stuList].sort((a,b) => {
+                const pa = a.total?a.correct/a.total:0;
+                const pb = b.total?b.correct/b.total:0;
+                return pa-pb;
+              });
+              const withPercentile = sorted.map((s,i) => ({
+                ...s,
+                pct: s.total?Math.round(s.correct/s.total*100):0,
+                percentile: Math.round((i/(Math.max(sorted.length-1,1)))*100)
+              }));
+              const getLevel = p => LEVELS.find(l => p>=l.min && p<l.max) || LEVELS[3];
+              
+              const filtered = activeFilter==="todos"
+                ? withPercentile
+                : withPercentile.filter(s => getLevel(s.percentile).key===activeFilter);
+              const displayed = showAll ? filtered : filtered.slice(0,10);
+              return (
+                <div style={{background:"var(--color-background-primary)",border:"0.5px solid var(--color-border-tertiary)",borderRadius:"var(--border-radius-lg)",padding:"1rem 1.25rem",marginBottom:16}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
+                    <p style={{fontSize:13,fontWeight:500,margin:0,color:"var(--color-text-primary)"}}>Progreso individual</p>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                      {[["todos","Todos"],["critico","🔴 Crítico"],["riesgo","🟠 En riesgo"],["progreso","🟡 En progreso"],["destacado","🟢 Destacado"]].map(([k,l])=>(
+                        <button key={k} onClick={()=>{setActiveFilter(k);setShowAll(false);}}
+                          style={{fontSize:11,padding:"3px 10px",borderRadius:20,cursor:"pointer",
+                            fontWeight:activeFilter===k?500:400,
+                            background:activeFilter===k?"#1A1060":"transparent",
+                            color:activeFilter===k?"#fff":"var(--color-text-secondary)",
+                            border:activeFilter===k?"none":"0.5px solid var(--color-border-tertiary)"}}>
+                          {l} {k!=="todos"?`(${withPercentile.filter(s=>getLevel(s.percentile).key===k).length})`:`(${withPercentile.length})`}
+                        </button>
+                      ))}
                     </div>
-                    <div style={{fontSize:12,fontWeight:500,color:color,minWidth:36,textAlign:"right"}}>{pct}%</div>
-                    <span style={{fontSize:11,color:"var(--color-text-secondary)",minWidth:60,textAlign:"right"}}>{s.sessions} sesiones</span>
                   </div>
-                );
-              })}
-            </div>
+                  {displayed.map((s,i) => {
+                    const lv = getLevel(s.percentile);
+                    return (
+                      <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",
+                        borderBottom:i<displayed.length-1?"0.5px solid var(--color-border-tertiary)":"none"}}>
+                        <Avatar name={s.name} size={28} />
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+                            <span style={{fontSize:13,color:"var(--color-text-primary)"}}>{s.name}</span>
+                            <span style={{fontSize:10,padding:"1px 7px",borderRadius:10,fontWeight:500,
+                              background:lv.bg,color:lv.color,border:"0.5px solid "+lv.border}}>
+                              {lv.label} · P{s.percentile}
+                            </span>
+                          </div>
+                          <div style={{height:4,background:"var(--color-background-secondary)",borderRadius:2,overflow:"hidden"}}>
+                            <div style={{width:s.pct+"%",height:"100%",background:lv.color,borderRadius:2}} />
+                          </div>
+                        </div>
+                        <div style={{fontSize:12,fontWeight:500,color:lv.color,minWidth:36,textAlign:"right"}}>{s.pct}%</div>
+                        <span style={{fontSize:11,color:"var(--color-text-secondary)",minWidth:60,textAlign:"right"}}>{s.sessions} ses.</span>
+                      </div>
+                    );
+                  })}
+                  {filtered.length>10 && (
+                    <button onClick={()=>setShowAll(v=>!v)}
+                      style={{width:"100%",marginTop:12,padding:"8px",borderRadius:"var(--border-radius-md)",
+                        fontSize:12,cursor:"pointer",background:"var(--color-background-secondary)",
+                        color:"var(--color-text-secondary)",border:"0.5px solid var(--color-border-tertiary)"}}>
+                      {showAll?"Ver menos":"Ver todos ("+filtered.length+")"}
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Historial */}
             <div style={{background:"var(--color-background-primary)",border:"0.5px solid var(--color-border-tertiary)",borderRadius:"var(--border-radius-lg)",padding:"1rem 1.25rem"}}>
