@@ -191,7 +191,7 @@ useEffect(() => {
   const canSuper   = role === "supervisor";
 
   return (
-    <div style={{fontFamily:"var(--font-sans)",maxWidth:1200,margin:"0 auto",padding:"1rem 0",minHeight:"100vh",background:"radial-gradient(ellipse at 20% 50%, rgba(108,76,255,0.06) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(168,85,247,0.05) 0%, transparent 50%)",position:"relative"}}>
+    <div style={{fontFamily:"var(--font-sans)",maxWidth:1200,margin:"0 auto",padding:window.innerWidth<768?"0.5rem":"1rem 0",minHeight:"100vh",background:"radial-gradient(ellipse at 20% 50%, rgba(108,76,255,0.06) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(168,85,247,0.05) 0%, transparent 50%)",position:"relative"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem",flexWrap:"wrap",gap:8}}>
         <div>
           
@@ -627,7 +627,7 @@ if (phase === "config") {
 
       {/* INICIO */}
       {studentTab==="inicio" && (
-  <div style={{display:"grid",gridTemplateColumns:"minmax(0,2fr) 360px",gap:28,alignItems:"start"}}>
+  <div style={{display:"grid",gridTemplateColumns:"minmax(0,2fr) 360px",gap:28,alignItems:"start",gridTemplateColumns:window.innerWidth<768?"1fr":"minmax(0,2fr) 360px"}}>
     
     {/* Panel principal */}
     <div style={{
@@ -642,7 +642,7 @@ if (phase === "config") {
           MODO ALUMNO
         </div>
         <h1 style={{
-          fontSize:34,
+          fontSize:window.innerWidth<768?18:34,
           lineHeight:1.05,
           letterSpacing:"-0.04em",
           margin:"0 0 10px",

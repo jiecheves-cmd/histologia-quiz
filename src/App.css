@@ -50,3 +50,34 @@ select:focus {
   outline: none;
   box-shadow: 0 0 0 4px rgba(124,92,255,.15);
 }
+/* ── RESPONSIVE MÓVIL ─────────────────────────────────────── */
+@media (max-width: 768px) {
+  .main-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Cabecera más compacta */
+  div[style*="maxWidth:1200"] {
+    padding: 0.75rem 1rem !important;
+  }
+
+  /* Texto más pequeño en móvil */
+  h1[style*="fontSize:34"] {
+    font-size: 24px !important;
+  }
+
+  /* Botones más grandes para tocar */
+  button {
+    min-height: 44px;
+  }
+
+  /* Panel de progreso encima en móvil */
+  .main-grid > div:last-child {
+    order: -1;
+  }
+
+  /* Métricas en 2 columnas en móvil */
+  div[style*="gridTemplateColumns:\"repeat(4"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
