@@ -180,11 +180,19 @@ useEffect(() => {
   });
 }, []);
 
+  const [passwordRequests, setPasswordRequests] = useState([]);
   const updateDb    = nd => { setDb(nd);    save("histo_db", nd); };
   const updateUsers = nu => { setUsers(nu); save("histo_users", nu, true); };
 
   if (!loaded) return <div style={{padding:"2rem",textAlign:"center",color:"var(--color-text-secondary)"}}>Cargando...</div>;
-  if (!currentUser) return <LoginScreen users={users} onLogin={u => { setCurrentUser(u); setTab("alumno"); }} />;
+  const handlePasswordRequest = (username) => {
+    if (!username.trim()) { alert("Escribe tu nombre de usuario primero."); return; }
+    const exists = users.find(u => u.username === username.trim());
+    if (!exists) { alert("No existe ningún usuario con ese nombre."); return; }
+    setPasswordRequests(prev => [...prev.filter(r => r !== username.trim()), username.trim()]);
+    alert("Tu solicitud ha sido enviada al supervisor. Contacta con tu profesor para obtener una nueva contraseña.");
+  };
+  if (!currentUser) return <LoginScreen users={users} onLogin={u => { setCurrentUser(u); setTab("alumno"); }} onPasswordRequest={handlePasswordRequest} />;
 
   const role      = currentUser.role;
   const canTeacher = role === "profesor" || role === "supervisor";
@@ -208,11 +216,18 @@ useEffect(() => {
             <Badge role={role} />
           </div>
         </div>
-        <button onClick={() => setCurrentUser(null)}
-          style={{fontSize:12,padding:"5px 14px",borderRadius:"var(--border-radius-md)",cursor:"pointer",
-            background:"transparent",color:"var(--color-text-secondary)",border:"0.5px solid var(--color-border-tertiary)"}}>
-          Cerrar sesión
-        </button>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={() => setTab("perfil")}
+            style={{fontSize:12,padding:"5px 14px",borderRadius:"var(--border-radius-md)",cursor:"pointer",
+              background:"transparent",color:"var(--color-text-secondary)",border:"0.5px solid var(--color-border-tertiary)"}}>
+            👤 Mi perfil
+          </button>
+          <button onClick={() => setCurrentUser(null)}
+            style={{fontSize:12,padding:"5px 14px",borderRadius:"var(--border-radius-md)",cursor:"pointer",
+              background:"transparent",color:"var(--color-text-secondary)",border:"0.5px solid var(--color-border-tertiary)"}}>
+            Cerrar sesión
+          </button>
+        </div>
       </div>
 
       {canTeacher && (
@@ -230,14 +245,80 @@ useEffect(() => {
       )}
 
       {tab==="alumno"     && <StudentMode db={db} studentName={currentUser.displayName} />}
+      {tab==="perfil"     && <ProfileScreen currentUser={currentUser} updateUsers={updateUsers} users={users} onBack={()=>setTab("alumno")} />}
       {tab==="profesor"   && canTeacher && <TeacherMode db={db} updateDb={updateDb} isSupervisor={canSuper} />}
-      {tab==="supervisor" && canSuper   && <SupervisorMode users={users} updateUsers={updateUsers} />}
+      {tab==="supervisor" && canSuper   && <SupervisorMode users={users} updateUsers={updateUsers} passwordRequests={passwordRequests} setPasswordRequests={setPasswordRequests} />}
     </div>
   );
 }
 
+// ─── PROFILE SCREEN ───────────────────────────────────────────────────────────
+function ProfileScreen({ currentUser, updateUsers, users, onBack }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword]         = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [msg, setMsg] = useState("");
+  const [msgType, setMsgType] = useState(""); // "ok" | "error"
+
+  const changePassword = () => {
+    if (currentPassword !== currentUser.password) {
+      setMsg("La contraseña actual no es correcta."); setMsgType("error"); return;
+    }
+    if (newPassword.length < 4) {
+      setMsg("La nueva contraseña debe tener al menos 4 caracteres."); setMsgType("error"); return;
+    }
+    if (newPassword !== confirmPassword) {
+      setMsg("Las contraseñas no coinciden."); setMsgType("error"); return;
+    }
+    updateUsers(users.map(u => u.id === currentUser.id ? {...u, password: newPassword} : u));
+    currentUser.password = newPassword;
+    setMsg("Contraseña cambiada correctamente."); setMsgType("ok");
+    setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
+  };
+
+  return (
+    <div style={{maxWidth:480,margin:"0 auto"}}>
+      <button onClick={onBack}
+        style={{fontSize:13,color:"var(--color-text-secondary)",background:"none",border:"none",cursor:"pointer",padding:0,marginBottom:20}}>
+        ← Volver
+      </button>
+
+      <div style={{background:"var(--color-background-primary)",border:"0.5px solid var(--color-border-tertiary)",borderRadius:20,padding:24,marginBottom:16}}>
+        <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:20}}>
+          <Avatar name={currentUser.displayName} allUsers={users} size={52} />
+          <div>
+            <div style={{fontSize:18,fontWeight:700,color:"var(--color-text-primary)"}}>{currentUser.displayName}</div>
+            <div style={{fontSize:13,color:"var(--color-text-secondary)",marginTop:2}}>@{currentUser.username}</div>
+            <Badge role={currentUser.role} />
+          </div>
+        </div>
+
+        <div style={{borderTop:"0.5px solid var(--color-border-tertiary)",paddingTop:20}}>
+          <p style={{fontSize:14,fontWeight:500,color:"var(--color-text-primary)",margin:"0 0 14px"}}>Cambiar contraseña</p>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <input type="password" value={currentPassword} onChange={e=>setCurrentPassword(e.target.value)}
+              placeholder="Contraseña actual"
+              style={{fontSize:14,padding:"10px 14px",borderRadius:12,border:"1.5px solid #E5E7EB",background:"#F9FAFB",color:"#1A1060",outline:"none"}} />
+            <input type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)}
+              placeholder="Nueva contraseña"
+              style={{fontSize:14,padding:"10px 14px",borderRadius:12,border:"1.5px solid #E5E7EB",background:"#F9FAFB",color:"#1A1060",outline:"none"}} />
+            <input type="password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)}
+              placeholder="Confirmar nueva contraseña"
+              style={{fontSize:14,padding:"10px 14px",borderRadius:12,border:"1.5px solid #E5E7EB",background:"#F9FAFB",color:"#1A1060",outline:"none"}} />
+          </div>
+          {msg && <p style={{fontSize:12,color:msgType==="ok"?"#1D9E75":"#C0392B",margin:"10px 0 0"}}>{msg}</p>}
+          <button onClick={changePassword}
+            style={{width:"100%",marginTop:14,padding:"11px",borderRadius:12,fontSize:14,fontWeight:600,cursor:"pointer",
+              background:"linear-gradient(135deg,#1A1060,#6C4CFF)",color:"#fff",border:"none"}}>
+            Cambiar contraseña
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
-function LoginScreen({ users, onLogin }) {
+function LoginScreen({ users, onLogin, onPasswordRequest }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError]       = useState("");
@@ -269,6 +350,11 @@ function LoginScreen({ users, onLogin }) {
         background:"linear-gradient(135deg,#1A1060,#6C4CFF)",color:"#fff",border:"none",
         boxShadow:"0 8px 24px rgba(108,76,255,0.35)"}}>
       Entrar
+    </button>
+    <button onClick={() => onPasswordRequest(username)}
+      style={{width:"100%",marginTop:10,padding:"10px",borderRadius:12,fontSize:13,fontWeight:500,cursor:"pointer",
+        background:"transparent",color:"#6C4CFF",border:"1.5px solid #C9BBFF"}}>
+      ¿Olvidaste tu contraseña?
     </button>
   </div>
 </div>
@@ -2355,7 +2441,7 @@ const text = data.text;
 }
 
 // ─── SUPERVISOR MODE ──────────────────────────────────────────────────────────
-function SupervisorMode({ users, updateUsers }) {
+function SupervisorMode({ users, updateUsers, passwordRequests, setPasswordRequests }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm]         = useState({displayName:"",username:"",password:"",role:"alumno"});
   const [msg, setMsg]           = useState("");
@@ -2375,7 +2461,35 @@ function SupervisorMode({ users, updateUsers }) {
   return (
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
-        <h3 style={{fontSize:16,fontWeight:600,margin:0}}>Gestión de usuarios</h3>
+        <h3 style={{fontSize:16,fontWeight:600,margin:0}}>Gestión de usuarios
+        {passwordRequests && passwordRequests.length > 0 && (
+          <div style={{background:"#FEF3DC",border:"0.5px solid #E6A020",borderRadius:14,padding:"12px 16px",marginBottom:16,marginTop:16}}>
+            <p style={{fontSize:13,fontWeight:600,color:"#854F0B",margin:"0 0 10px"}}>⚠️ Solicitudes de contraseña pendientes ({passwordRequests.length})</p>
+            {passwordRequests.map((username,i) => {
+              const u = users.find(u => u.username === username);
+              return (
+                <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<passwordRequests.length-1?"0.5px solid #E6A020":"none"}}>
+                  <Avatar name={u?.displayName||username} size={28} />
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:500,color:"var(--color-text-primary)"}}>{u?.displayName||username}</div>
+                    <div style={{fontSize:11,color:"var(--color-text-secondary)"}}> @{username}</div>
+                  </div>
+                  <button onClick={()=>{
+                    const newPass = prompt("Nueva contraseña para "+username+":");
+                    if (!newPass) return;
+                    updateUsers(users.map(u => u.username===username ? {...u,password:newPass} : u));
+                    setPasswordRequests(prev => prev.filter(r => r!==username));
+                    alert("Contraseña cambiada correctamente.");
+                  }}
+                    style={{fontSize:12,padding:"5px 12px",borderRadius:10,cursor:"pointer",fontWeight:500,
+                      background:"#1A1060",color:"#fff",border:"none"}}>
+                    Resetear
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}</h3>
         <button onClick={() => { setShowForm(s => !s); setMsg(""); }}
           style={{padding:"6px 14px",borderRadius:"var(--border-radius-md)",fontSize:13,fontWeight:500,cursor:"pointer",
             background:"var(--color-background-success)",color:"var(--color-text-success)",border:"0.5px solid var(--color-border-success)"}}>
