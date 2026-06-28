@@ -694,7 +694,7 @@ if (phase === "config") {
   // Cerrar liga anterior si cambió la semana
   const lastWeekKey = getWeekKey(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
   const lastWeekWinner = groups.find(g => g.find(s => s.name === studentName))?.[0];
-  if (lastWeekWinner) saveHallOfFame(lastWeekKey, lastWeekWinner.name, lastWeekWinner.weekXP, save);
+  if (lastWeekWinner && lastWeekWinner.weekXP > 0) saveHallOfFame(lastWeekKey, lastWeekWinner.name, lastWeekWinner.weekXP, save);
 
   return (
     <div>
