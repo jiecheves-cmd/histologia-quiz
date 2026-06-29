@@ -218,6 +218,7 @@ async function migrateOldSessions(load, save) {
         filter: s.filter || "todas"
       };
       await save("histo_summary_" + id, summary, true);
+      await save("histo_detail_" + id, { id, answers: s.answers || [] }, false);
       newKeys.push(id);
     }
     // Combinar con keys existentes
@@ -280,6 +281,8 @@ export default function App() {
   const [db, setDb]           = useState(DEFAULT_DB);
   const [users, setUsers]     = useState(DEFAULT_USERS);
   const [sessions, setSessions] = useState([]);
+  const [streakDays, setStreakDays] = useState(0);
+const [answeredUnique, setAnsweredUnique] = useState(0);
   const [currentUser, setCurrentUser] = useState(null);
   const [tab, setTab]         = useState("alumno");
   const [loaded, setLoaded]   = useState(false);
@@ -555,6 +558,8 @@ function getHallOfFame() {
 // ─── STUDENT MODE ─────────────────────────────────────────────────────────────
 function StudentMode({ db, studentName }) {
   const [sessions, setSessions] = useState([]);
+  const [streakDays, setStreakDays] = useState(0);
+const [answeredUnique, setAnsweredUnique] = useState(0);
 
 useEffect(() => {
   loadSummaries(load).then(setSessions);
@@ -588,9 +593,6 @@ const myPoints = ranking.find(r => r.name === studentName)?.points || 0;
 const histoXP = myPoints;
 const totalQuestions = db.length;
 
-const answeredUnique = sessions
-  .filter(s => s.student === studentName)
-  .reduce((sum, s) => sum + (s.total || 0), 0);
 
 const coveragePct = totalQuestions
   ? Math.round((answeredUnique / totalQuestions) * 100)
@@ -607,7 +609,19 @@ const xpNext = nextLevel ? nextLevel.xp : currentLevel.xp;
 const xpProgress = nextLevel
   ? Math.min(100, Math.round(((histoXP - xpCurrent) / (xpNext - xpCurrent)) * 100))
   : 100;
- const [streakDays, setStreakDays] = useState(0);
+ 
+ useEffect(() => {
+  const mySessionIds = sessions.filter(s => s.student === studentName).map(s => s.id);
+  if (mySessionIds.length === 0) { setAnsweredUnique(0); return; }
+  loadDetails(load, mySessionIds).then(details => {
+    const ids = new Set(
+      details.flatMap(s => s.answers || [])
+        .map(a => a.questionId)
+        .filter(Boolean)
+    );
+    setAnsweredUnique(ids.size);
+  });
+}, [sessions, studentName]);
 
 useEffect(() => {
   const lastSessionDate = localStorage.getItem("histo_last_session_" + studentName);
@@ -632,11 +646,14 @@ useEffect(() => {
   if (studentTab !== "inicio" || phase !== "config") return;
   const script = document.createElement("script");
   script.src = "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js";
-  script.onload = () => {
+  script.onload = async () => {
     const canvas = document.getElementById("radarChart");
     if (!canvas) return;
-    if (canvas._chartInstance) canvas._chartInstance.destroy();
-    const allAnswers = [];
+    if (canvas._chartInstance) { canvas._chartInstance.destroy(); canvas._chartInstance = null; }
+    Chart.helpers && Chart.helpers.each(Chart.instances, (instance) => { if (instance.canvas === canvas) instance.destroy(); });
+    const mySummaries = sessions.filter(s => s.student === studentName);
+    const myDetails = await loadDetails(load, mySummaries.map(s => s.id));
+    const allAnswers = myDetails.flatMap(s => s.answers || []);
     const topicData = {};
     db.forEach(q => { if (!topicData[q.topic]) topicData[q.topic] = {correct:0,total:0}; });
     allAnswers.forEach(a => {
