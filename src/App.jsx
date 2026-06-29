@@ -704,7 +704,9 @@ save(seenKey, newSeen.length >= pool.length ? [] : newSeen);
         filter, answers, points: sc.points, bonuses: sc.bonuses
       };
       const sessions = await load("histo_sessions", [], true);
-      await save("histo_sessions", [...sessions, sessionData], true);
+      const updatedSessions = [...sessions, sessionData];
+      await save("histo_sessions", updatedSessions, true);
+      setSessions(updatedSessions);
       const today = new Date().toISOString().split("T")[0];
 const lastDay = localStorage.getItem("histo_last_session_" + studentName);
 const currentStreak = parseInt(localStorage.getItem("histo_streak_" + studentName) || "0");
