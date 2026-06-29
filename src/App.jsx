@@ -168,6 +168,63 @@ async function loadAllQuestions(load, defaultDb) {
     return defaultDb;
   }
 }
+// ─── SESSION HELPERS ──────────────────────────────────────────────────────────
+async function saveSession(sessionData, save) {
+  const id = Date.now() + "_" + Math.random().toString(36).slice(2,7);
+  const summary = {
+    id,
+    student: sessionData.student,
+    date: sessionData.date,
+    points: sessionData.points,
+    bonuses: sessionData.bonuses,
+    correct: sessionData.answers.filter(a => a.correct).length,
+    total: sessionData.answers.length,
+    durationMs: sessionData.durationMs,
+    filter: sessionData.filter
+  };
+  const detail = {
+    id,
+    answers: sessionData.answers
+  };
+  await save("histo_summary_" + id, summary, true);
+  await save("histo_detail_" + id, detail, false);
+  await save("histo_summary_keys", null, true); // trigger index update
+  return { summary, detail };
+}
+
+async function loadSummaries(load) {
+  try {
+    const keys = await load("histo_summary_keys", [], true);
+    if (!keys || keys.length === 0) {
+      // Intentar cargar formato antiguo
+      const old = await load("histo_sessions", [], true);
+      return old.map(s => ({
+        id: s.date,
+        student: s.student,
+        date: s.date,
+        points: s.points || 0,
+        bonuses: s.bonuses || 0,
+        correct: (s.answers||[]).filter(a => a.correct).length,
+        total: (s.answers||[]).length,
+        durationMs: s.durationMs || 0,
+        filter: s.filter || "todas"
+      }));
+    }
+    const summaries = await Promise.all(keys.map(id => load("histo_summary_" + id, null, true)));
+    return summaries.filter(Boolean);
+  } catch(e) {
+    return [];
+  }
+}
+
+async function loadDetails(load, summaryIds) {
+  try {
+    const details = await Promise.all(summaryIds.map(id => load("histo_detail_" + id, null, false)));
+    return details.filter(Boolean);
+  } catch(e) {
+    return [];
+  }
+}
 // ─── APP ──────────────────────────────────────────────────────────────────────
 const LEVELS = [
   { level: 1, title: "🔬 Aprendiz", xp: 0, coverage: 0 },
@@ -194,7 +251,7 @@ useEffect(() => {
   Promise.all([
     loadAllQuestions(load, DEFAULT_DB),
     load("histo_users", DEFAULT_USERS, true),
-    load("histo_sessions", [], true)
+    loadSummaries(load)
   ])
   .then(([d, u, s]) => {
     setDb(d);
@@ -460,7 +517,7 @@ function StudentMode({ db, studentName }) {
   const [sessions, setSessions] = useState([]);
 
 useEffect(() => {
-  load("histo_sessions", [], true).then(setSessions);
+  loadSummaries(load).then(setSessions);
 }, []);
   const [studentTab, setStudentTab] = useState("inicio");
   const [phase, setPhase]           = useState("config");
@@ -491,15 +548,9 @@ const myPoints = ranking.find(r => r.name === studentName)?.points || 0;
 const histoXP = myPoints;
 const totalQuestions = db.length;
 
-const answeredQuestionIds = new Set(
-  sessions
-    .filter(s => s.student === studentName)
-    .flatMap(s => s.answers || [])
-    .map(a => a.questionId)
-    .filter(Boolean)
-);
-
-const answeredUnique = answeredQuestionIds.size;
+const answeredUnique = sessions
+  .filter(s => s.student === studentName)
+  .reduce((sum, s) => sum + (s.total || 0), 0);
 
 const coveragePct = totalQuestions
   ? Math.round((answeredUnique / totalQuestions) * 100)
@@ -545,7 +596,7 @@ useEffect(() => {
     const canvas = document.getElementById("radarChart");
     if (!canvas) return;
     if (canvas._chartInstance) canvas._chartInstance.destroy();
-    const allAnswers = sessions.flatMap(s => s.answers || []);
+    const allAnswers = [];
     const topicData = {};
     db.forEach(q => { if (!topicData[q.topic]) topicData[q.topic] = {correct:0,total:0}; });
     allAnswers.forEach(a => {
@@ -576,9 +627,10 @@ useEffect(() => {
   document.head.appendChild(script);
 }, [studentTab, phase, sessions, db]);
   const buildSmartSession = async () => {
-  const allSessions = await load("histo_sessions", [], true);
-  const mySessions = allSessions.filter(s => s.student === studentName);
-  const myAnswers = mySessions.flatMap(s => s.answers || []);
+  const allSummaries = await loadSummaries(load);
+  const mySummaries = allSummaries.filter(s => s.student === studentName);
+  const myDetails = await loadDetails(load, mySummaries.map(s => s.id));
+  const myAnswers = myDetails.flatMap(s => s.answers || []);
 
   // Contar aciertos y fallos por pregunta
   const qStats = {};
@@ -620,7 +672,7 @@ useEffect(() => {
 };
 
 const smartTopics = () => {
-  const allAnswers = sessions.flatMap(s => s.answers || []);
+  const allAnswers = [];
   const topicStats = {};
   db.forEach(q => { if (!topicStats[q.topic]) topicStats[q.topic] = { correct: 0, total: 0 }; });
   allAnswers.forEach(a => {
@@ -703,10 +755,13 @@ save(seenKey, newSeen.length >= pool.length ? [] : newSeen);
         durationMs: Date.now() - (sessionStart||Date.now()),
         filter, answers, points: sc.points, bonuses: sc.bonuses
       };
-      const sessions = await load("histo_sessions", [], true);
-      const updatedSessions = [...sessions, sessionData];
-      await save("histo_sessions", updatedSessions, true);
+      const { summary } = await saveSession(sessionData, save);
+      const updatedSessions = [...sessions, summary];
       setSessions(updatedSessions);
+      // Actualizar índice de resúmenes
+      const existingKeys = await load("histo_summary_keys", [], true);
+      const keysArray = Array.isArray(existingKeys) ? existingKeys : [];
+      await save("histo_summary_keys", [...keysArray, summary.id], true);
       const today = new Date().toISOString().split("T")[0];
 const lastDay = localStorage.getItem("histo_last_session_" + studentName);
 const currentStreak = parseInt(localStorage.getItem("histo_streak_" + studentName) || "0");
@@ -1303,7 +1358,7 @@ function ResultsWithRanking({ studentName, answers, questions, sessionStart, cor
   const [rankPeriod, setRankPeriod] = useState("week");
   const { load } = useStorage();
 
-  useEffect(() => { load("histo_sessions", [], true).then(setSessions); }, []);
+  useEffect(() => { loadSummaries(load).then(setSessions); }, []);
 
   const medals = ["🥇","🥈","🥉"];
   const periodLabel = { week:"Esta semana", month:"Este mes", year:"Este año" };
@@ -1314,7 +1369,7 @@ function ResultsWithRanking({ studentName, answers, questions, sessionStart, cor
     const stuPoints = {};
     sessions.filter(s => periodKey(s.date, period)===curKey).forEach(s => {
       if (!stuPoints[s.student]) stuPoints[s.student] = { name:s.student, points:0 };
-      const sc = s.points != null ? s.points : calcSessionScore(s.answers||[]).points;
+      const sc = s.points != null ? s.points : 0;
       stuPoints[s.student].points = Math.round((stuPoints[s.student].points + sc)*100)/100;
     });
     return Object.values(stuPoints).sort((a,b) => b.points-a.points);
@@ -1824,6 +1879,7 @@ function TeacherMode({ db, updateDb, isSupervisor }) {
   const [view, setView]             = useState("stats");
   const [editing, setEditing]       = useState(null);
   const [sessions, setSessions]     = useState([]);
+  const [sessionDetails, setSessionDetails] = useState([]);
   const [generating, setGenerating] = useState(false);
   const [genTopic, setGenTopic]     = useState("");
   const [genDiff, setGenDiff]       = useState("básico");
@@ -1840,7 +1896,13 @@ const [showAll, setShowAll] = useState(false);
   const explImgRef = useRef();
   const { save, load } = useStorage();
 
-  useEffect(() => { load("histo_sessions", [], true).then(setSessions); }, []);
+  useEffect(() => { 
+    loadSummaries(load).then(async summaries => {
+      setSessions(summaries);
+      const details = await loadDetails(load, summaries.map(s => s.id));
+      setSessionDetails(details);
+    }); 
+  }, []);
 
   const resetForm = () => setForm({difficulty:"básico",topic:TOPICS[0],question:"",options:["","","",""],answer:0,explanation:"",explanationImage:null,image:null});
   const openNew  = () => { resetForm(); setEditing(null); setView("edit"); };
@@ -1935,7 +1997,7 @@ const text = data.text;
 
   // ── Stats ──
   if (view==="stats") {
-    const allA = sessions.flatMap(s => s.answers||[]);
+    const allA = sessionDetails.flatMap(s => s.answers||[]);
     const students = [...new Set(sessions.map(s => s.student))];
     const totalTime = sessions.reduce((a,s) => a+(s.durationMs||0), 0);
     const supervised = db.filter(q => q.supervised).length;
@@ -1953,7 +2015,8 @@ const text = data.text;
       if (!stuStats[s.student]) stuStats[s.student]={name:s.student,sessions:0,totalTime:0,correct:0,total:0};
       stuStats[s.student].sessions++;
       stuStats[s.student].totalTime += s.durationMs||0;
-      (s.answers||[]).forEach(a => { stuStats[s.student].total++; if (a.correct) stuStats[s.student].correct++; });
+      stuStats[s.student].total += s.total || 0;
+      stuStats[s.student].correct += s.correct || 0;
     });
     const stuList = Object.values(stuStats).sort((a,b) => b.sessions-a.sessions);
 
@@ -2164,7 +2227,7 @@ const text = data.text;
     const stuPoints = {};
     periodSessions.forEach(s => {
       if (!stuPoints[s.student]) stuPoints[s.student]={name:s.student,points:0,sessions:0,correct:0,total:0,bonuses:0};
-      const sc = s.points != null ? s.points : calcSessionScore(s.answers||[]).points;
+      const sc = s.points != null ? s.points : 0;
       const bn = s.bonuses != null ? s.bonuses : calcSessionScore(s.answers||[]).bonuses;
       stuPoints[s.student].points   = Math.round((stuPoints[s.student].points + sc)*100)/100;
       stuPoints[s.student].sessions++;
