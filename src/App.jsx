@@ -1819,13 +1819,32 @@ const [showAll, setShowAll] = useState(false);
     else updateDb([...db, {...form,id:Date.now(),supervised:false}]);
     setView("list");
   };
-  const handleImg = e => {
+  const compressImage = (file, maxWidth = 800, quality = 0.7) => new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const scale = Math.min(1, maxWidth / img.width);
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  const handleImg = async e => {
     const f = e.target.files[0]; if (!f) return;
-    const r = new FileReader(); r.onload = ev => setForm(f => ({...f,image:ev.target.result})); r.readAsDataURL(f);
+    const compressed = await compressImage(f);
+    setForm(prev => ({...prev, image: compressed}));
   };
-  const handleExplImg = e => {
+  const handleExplImg = async e => {
     const f = e.target.files[0]; if (!f) return;
-    const r = new FileReader(); r.onload = ev => setForm(f => ({...f,explanationImage:ev.target.result})); r.readAsDataURL(f);
+    const compressed = await compressImage(f);
+    setForm(prev => ({...prev, explanationImage: compressed}));
   };
   const toggleSupervised = id => updateDb(db.map(q => q.id===id ? {...q,supervised:!q.supervised} : q));
 
