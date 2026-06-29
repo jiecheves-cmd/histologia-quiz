@@ -144,6 +144,30 @@ function SupervisionTag({ supervised }) {
     : <span style={{fontSize:11,padding:"2px 8px",borderRadius:10,background:"#FEF3DC",color:"#7A4A00",fontWeight:600}}>Pendiente</span>;
 }
 
+// ─── DB HELPERS ───────────────────────────────────────────────────────────────
+async function saveQuestion(q, save) {
+  await save("histo_q_" + q.id, q);
+}
+
+async function deleteQuestion(id, save) {
+  await save("histo_q_" + id, null);
+}
+
+async function loadAllQuestions(load, defaultDb) {
+  try {
+    // Primero intentar cargar el nuevo formato (una fila por pregunta)
+    const keys = await load("histo_q_keys", [], true);
+    if (keys && keys.length > 0) {
+      const questions = await Promise.all(keys.map(id => load("histo_q_" + id, null)));
+      return questions.filter(Boolean);
+    }
+    // Si no hay preguntas en nuevo formato, cargar del formato antiguo
+    const oldDb = await load("histo_db", defaultDb);
+    return oldDb;
+  } catch(e) {
+    return defaultDb;
+  }
+}
 // ─── APP ──────────────────────────────────────────────────────────────────────
 const LEVELS = [
   { level: 1, title: "🔬 Aprendiz", xp: 0, coverage: 0 },
@@ -168,7 +192,7 @@ export default function App() {
 
 useEffect(() => {
   Promise.all([
-    load("histo_db", DEFAULT_DB),
+    loadAllQuestions(load, DEFAULT_DB),
     load("histo_users", DEFAULT_USERS, true),
     load("histo_sessions", [], true)
   ])
@@ -181,7 +205,19 @@ useEffect(() => {
 }, []);
 
   const [passwordRequests, setPasswordRequests] = useState([]);
-  const updateDb    = nd => { setDb(nd);    save("histo_db", nd); };
+  const updateDb = async nd => {
+    setDb(nd);
+    // Guardar cada pregunta individualmente
+    const oldIds = db.map(q => q.id);
+    const newIds = nd.map(q => q.id);
+    // Guardar preguntas nuevas o modificadas
+    await Promise.all(nd.map(q => save("histo_q_" + q.id, q)));
+    // Eliminar preguntas borradas
+    const deleted = oldIds.filter(id => !newIds.includes(id));
+    await Promise.all(deleted.map(id => save("histo_q_" + id, null)));
+    // Guardar índice de IDs
+    await save("histo_q_keys", newIds, true);
+  };
   const updateUsers = nu => { setUsers(nu); save("histo_users", nu, true); };
 
   if (!loaded) return <div style={{padding:"2rem",textAlign:"center",color:"var(--color-text-secondary)"}}>Cargando...</div>;
