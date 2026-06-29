@@ -192,6 +192,44 @@ async function saveSession(sessionData, save) {
   return { summary, detail };
 }
 
+async function migrateOldSessions(load, save) {
+  try {
+    // Verificar si ya se migró
+    const migrated = await load("histo_migration_done", false, true);
+    if (migrated) return;
+    
+    // Cargar sesiones antiguas
+    const oldSessions = await load("histo_sessions", [], true);
+    if (!oldSessions || oldSessions.length === 0) return;
+    
+    // Migrar cada sesión al nuevo formato
+    const newKeys = [];
+    for (const s of oldSessions) {
+      const id = s.date + "_migrated";
+      const summary = {
+        id,
+        student: s.student,
+        date: s.date,
+        points: s.points || 0,
+        bonuses: s.bonuses || 0,
+        correct: (s.answers||[]).filter(a => a.correct).length,
+        total: (s.answers||[]).length,
+        durationMs: s.durationMs || 0,
+        filter: s.filter || "todas"
+      };
+      await save("histo_summary_" + id, summary, true);
+      newKeys.push(id);
+    }
+    // Combinar con keys existentes
+    const existingKeys = await load("histo_summary_keys", [], true);
+    const allKeys = [...new Set([...(Array.isArray(existingKeys) ? existingKeys : []), ...newKeys])];
+    await save("histo_summary_keys", allKeys, true);
+    await save("histo_migration_done", true, true);
+    console.log("Migración completada:", newKeys.length, "sesiones");
+  } catch(e) {
+    console.error("Error en migración:", e);
+  }
+}
 async function loadSummaries(load) {
   try {
     const keys = await load("histo_summary_keys", [], true);
@@ -248,16 +286,18 @@ export default function App() {
   const { save, load }        = useStorage();
 
 useEffect(() => {
-  Promise.all([
-    loadAllQuestions(load, DEFAULT_DB),
-    load("histo_users", DEFAULT_USERS, true),
-    loadSummaries(load)
-  ])
-  .then(([d, u, s]) => {
-    setDb(d);
-    setUsers(u);
-    setSessions(s);
-    setLoaded(true);
+  migrateOldSessions(load, save).then(() => {
+    Promise.all([
+      loadAllQuestions(load, DEFAULT_DB),
+      load("histo_users", DEFAULT_USERS, true),
+      loadSummaries(load)
+    ])
+    .then(([d, u, s]) => {
+      setDb(d);
+      setUsers(u);
+      setSessions(s);
+      setLoaded(true);
+    });
   });
 }, []);
 
