@@ -1133,29 +1133,24 @@ if (phase === "config") {
 
 <div style={{
   marginTop:8,
-  fontSize:12,
-  opacity:0.9
+  fontSize:15,
+  opacity:1,
+  fontWeight:600
 }}>
-  ⭐ Nivel {currentLevel.level} · {currentLevel.title}
+  ⭐ Nivel {currentLevel.level}
 </div>
-<div style={{
-  marginTop:6,
-  fontSize:12,
-  opacity:0.9
-}}>
+<div style={{marginTop:4,fontSize:18,fontWeight:800,opacity:1,color:"#fff"}}>
+  {currentLevel.title}
+</div>
+<div style={{marginTop:4,fontSize:11,opacity:0.75}}>
   📚 Cobertura: {answeredUnique} / {totalQuestions} preguntas ({coveragePct}%)
-  {nextLevel && (
-  <div style={{
-    marginTop:6,
-    fontSize:12,
-    opacity:0.9
-  }}>
-    Siguiente: ⭐ Nivel {nextLevel.level} · {nextLevel.title}
-    <br />
-    Faltan {xpMissing.toFixed(0)} HistoXP y {coverageMissing}% de cobertura
+</div>
+{nextLevel && (
+  <div style={{marginTop:8,fontSize:10,opacity:0.65,borderTop:"1px solid rgba(255,255,255,0.2)",paddingTop:8}}>
+    Siguiente: Nivel {nextLevel.level} · {nextLevel.title}<br/>
+    Faltan {xpMissing.toFixed(0)} XP y {coverageMissing}% cobertura
   </div>
 )}
-</div>
 </div>
 
       {/* Radar de dominio */}
