@@ -1374,6 +1374,17 @@ if (phase === "config") {
             )}
           </div>
           <span style={{color:"var(--color-text-secondary)"}}>{q.explanation}</span>
+          {q.link && (
+            <a href={q.link} target="_blank" rel="noopener noreferrer"
+              style={{display:"flex",alignItems:"center",gap:8,marginTop:12,padding:"10px 16px",
+                borderRadius:12,background:"linear-gradient(135deg,#1A1060,#6C4CFF)",
+                color:"#fff",textDecoration:"none",fontSize:13,fontWeight:600,
+                boxShadow:"0 4px 16px rgba(108,76,255,0.3)"}}>
+              <span style={{fontSize:18}}>🔗</span>
+              <span>Ampliar conocimientos</span>
+              <span style={{marginLeft:"auto",fontSize:12,opacity:0.8}}>↗</span>
+            </a>
+          )}
           {q.explanationImage && (
             <div style={{marginTop:10}}>
               <ImageViewer src={q.explanationImage} label="Ver imagen de explicación" />
@@ -1943,7 +1954,7 @@ function TeacherMode({ db, updateDb, isSupervisor }) {
 const [showAll, setShowAll] = useState(false);
   const [filterTopic, setFilterTopic]           = useState("todos");
   const [rankPeriod, setRankPeriod]             = useState("week");
-  const [form, setForm] = useState({difficulty:"básico",topic:TOPICS[0],question:"",options:["","","",""],answer:0,explanation:"",image:null});
+  const [form, setForm] = useState({difficulty:"básico",topic:TOPICS[0],question:"",options:["","","",""],answer:0,explanation:"",image:null,link:""});
   const fileRef    = useRef();
   const explImgRef = useRef();
   const { save, load } = useStorage();
@@ -1956,7 +1967,7 @@ const [showAll, setShowAll] = useState(false);
     }); 
   }, []);
 
-  const resetForm = () => setForm({difficulty:"básico",topic:TOPICS[0],question:"",options:["","","",""],answer:0,explanation:"",explanationImage:null,image:null});
+  const resetForm = () => setForm({difficulty:"básico",topic:TOPICS[0],question:"",options:["","","",""],answer:0,explanation:"",explanationImage:null,image:null,link:""});
   const openNew  = () => { resetForm(); setEditing(null); setView("edit"); };
   const openEdit = q => {
     setForm({difficulty:q.difficulty,topic:q.topic||TOPICS[0],question:q.question,
@@ -2457,6 +2468,14 @@ const text = data.text;
           <input ref={explImgRef} type="file" accept="image/*" onChange={handleExplImg} style={{display:"none"}} />
         </div>
         <div>
+          <div>
+  <div style={{fontSize:13,color:"var(--color-text-secondary)",marginBottom:4}}>Link de ampliación (opcional)</div>
+  <input value={form.link||""} onChange={e => setForm(f => ({...f,link:e.target.value}))}
+    placeholder="https://www.youtube.com/... o cualquier URL"
+    style={{width:"100%",fontSize:13,padding:"8px 10px",borderRadius:"var(--border-radius-md)",
+      border:"0.5px solid var(--color-border-tertiary)",background:"var(--color-background-primary)",
+      color:"var(--color-text-primary)",boxSizing:"border-box"}} />
+</div>
           <div style={{fontSize:13,color:"var(--color-text-secondary)",marginBottom:6}}>Imagen (opcional)</div>
           {form.image && <img src={form.image} alt="" style={{width:"100%",maxHeight:200,objectFit:"cover",borderRadius:"var(--border-radius-md)",marginBottom:8}} />}
           <input ref={fileRef} type="file" accept="image/*" onChange={handleImg} style={{display:"none"}} />
