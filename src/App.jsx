@@ -2685,6 +2685,10 @@ function SupervisorMode({ users, updateUsers, passwordRequests, setPasswordReque
   const [showForm, setShowForm] = useState(false);
   const [form, setForm]         = useState({displayName:"",username:"",password:"",role:"alumno"});
   const [msg, setMsg]           = useState("");
+  const [resetText, setResetText] = useState("");
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetMsg, setResetMsg] = useState("");
+  const { save, list } = useStorage();
 
   const add = () => {
     if (!form.username.trim()||!form.password.trim()||!form.displayName.trim()) { setMsg("Completa todos los campos."); return; }
@@ -2698,44 +2702,82 @@ function SupervisorMode({ users, updateUsers, passwordRequests, setPasswordReque
     updateUsers(users.filter(u => u.id!==id));
   };
 
+  const resetAllProgress = async () => {
+    if (resetText.trim() !== "REINICIAR") {
+      setResetMsg("Escribe REINICIAR para confirmar el reseteo.");
+      return;
+    }
+    const ok = window.confirm("Esto borrará el progreso, XP, ranking, sesiones y rachas de todos los usuarios. Usuarios y preguntas se conservan. ¿Continuar?");
+    if (!ok) return;
+
+    setResetBusy(true);
+    setResetMsg("Reseteando progreso...");
+    try {
+      const [summaries, details, seen] = await Promise.all([
+        list("histo_summary_", true),
+        list("histo_detail_", false),
+        list("histo_seen_", false)
+      ]);
+
+      await Promise.all([
+        ...summaries
+          .filter(item => item.key !== "histo_summary_keys")
+          .map(item => save(item.key, null, true)),
+        ...details.map(item => save(item.key, null, false)),
+        ...seen.map(item => save(item.key, [], false)),
+        save("histo_sessions", [], true),
+        save("histo_summary_keys", [], true),
+        save("histo_migration_done", true, true),
+        save("histo_progress_reset_at", new Date().toISOString(), true)
+      ]);
+
+      setResetText("");
+      setResetMsg("Progreso reiniciado. Los alumnos empezarán de cero al recargar la app.");
+    } catch(e) {
+      setResetMsg("Error al resetear: " + (e?.message || "inténtalo de nuevo"));
+    }
+    setResetBusy(false);
+  };
+
   return (
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
-        <h3 style={{fontSize:16,fontWeight:600,margin:0}}>Gestión de usuarios
-        {passwordRequests && passwordRequests.length > 0 && (
-          <div style={{background:"#FEF3DC",border:"0.5px solid #E6A020",borderRadius:14,padding:"12px 16px",marginBottom:16,marginTop:16}}>
-            <p style={{fontSize:13,fontWeight:600,color:"#854F0B",margin:"0 0 10px"}}>⚠️ Solicitudes de contraseña pendientes ({passwordRequests.length})</p>
-            {passwordRequests.map((username,i) => {
-              const u = users.find(u => u.username === username);
-              return (
-                <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<passwordRequests.length-1?"0.5px solid #E6A020":"none"}}>
-                  <Avatar name={u?.displayName||username} size={28} />
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:13,fontWeight:500,color:"var(--color-text-primary)"}}>{u?.displayName||username}</div>
-                    <div style={{fontSize:11,color:"var(--color-text-secondary)"}}> @{username}</div>
-                  </div>
-                  <button onClick={()=>{
-                    const newPass = prompt("Nueva contraseña para "+username+":");
-                    if (!newPass) return;
-                    updateUsers(users.map(u => u.username===username ? {...u,password:newPass} : u));
-                    setPasswordRequests(prev => prev.filter(r => r!==username));
-                    alert("Contraseña cambiada correctamente.");
-                  }}
-                    style={{fontSize:12,padding:"5px 12px",borderRadius:10,cursor:"pointer",fontWeight:500,
-                      background:"#1A1060",color:"#fff",border:"none"}}>
-                    Resetear
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}</h3>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem",gap:12,flexWrap:"wrap"}}>
+        <h3 style={{fontSize:16,fontWeight:600,margin:0}}>Gestión de usuarios</h3>
         <button onClick={() => { setShowForm(s => !s); setMsg(""); }}
           style={{padding:"6px 14px",borderRadius:"var(--border-radius-md)",fontSize:13,fontWeight:500,cursor:"pointer",
             background:"var(--color-background-success)",color:"var(--color-text-success)",border:"0.5px solid var(--color-border-success)"}}>
           + Nuevo usuario
         </button>
       </div>
+
+      {passwordRequests && passwordRequests.length > 0 && (
+        <div style={{background:"#FEF3DC",border:"0.5px solid #E6A020",borderRadius:14,padding:"12px 16px",marginBottom:16}}>
+          <p style={{fontSize:13,fontWeight:600,color:"#854F0B",margin:"0 0 10px"}}>⚠️ Solicitudes de contraseña pendientes ({passwordRequests.length})</p>
+          {passwordRequests.map((username,i) => {
+            const u = users.find(u => u.username === username);
+            return (
+              <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<passwordRequests.length-1?"0.5px solid #E6A020":"none"}}>
+                <Avatar name={u?.displayName||username} size={28} />
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,fontWeight:500,color:"var(--color-text-primary)"}}>{u?.displayName||username}</div>
+                  <div style={{fontSize:11,color:"var(--color-text-secondary)"}}> @{username}</div>
+                </div>
+                <button onClick={()=>{
+                  const newPass = prompt("Nueva contraseña para "+username+":");
+                  if (!newPass) return;
+                  updateUsers(users.map(u => u.username===username ? {...u,password:newPass} : u));
+                  setPasswordRequests(prev => prev.filter(r => r!==username));
+                  alert("Contraseña cambiada correctamente.");
+                }}
+                  style={{fontSize:12,padding:"5px 12px",borderRadius:10,cursor:"pointer",fontWeight:500,
+                    background:"#1A1060",color:"#fff",border:"none"}}>
+                  Resetear
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {showForm && (
         <div style={{background:"var(--color-background-secondary)",borderRadius:"var(--border-radius-md)",padding:"14px 16px",marginBottom:"1.25rem"}}>
@@ -2776,6 +2818,36 @@ function SupervisorMode({ users, updateUsers, passwordRequests, setPasswordReque
           </div>
         </div>
       )}
+
+      <div style={{
+        background:"#FFF7ED",
+        border:"0.5px solid #FDBA74",
+        borderRadius:"var(--border-radius-md)",
+        padding:"14px 16px",
+        marginBottom:"1.25rem"
+      }}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:16,alignItems:"flex-start",flexWrap:"wrap"}}>
+          <div style={{flex:1,minWidth:240}}>
+            <h4 style={{fontSize:14,fontWeight:700,color:"#9A3412",margin:"0 0 6px"}}>Reiniciar progreso de todos</h4>
+            <p style={{fontSize:12,color:"#7C2D12",lineHeight:1.5,margin:0}}>
+              Borra sesiones, XP, ranking, progreso por preguntas, rachas y Hall of Fame. Conserva usuarios, contraseñas y banco de preguntas.
+            </p>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <input value={resetText} onChange={e => setResetText(e.target.value)} placeholder="Escribe REINICIAR"
+              style={{fontSize:13,padding:"7px 10px",borderRadius:"var(--border-radius-md)",minWidth:160,
+                border:"0.5px solid #FDBA74",background:"#fff",color:"var(--color-text-primary)"}} />
+            <button onClick={resetAllProgress} disabled={resetBusy || resetText.trim() !== "REINICIAR"}
+              style={{fontSize:13,padding:"7px 14px",borderRadius:"var(--border-radius-md)",fontWeight:700,
+                cursor:(resetBusy || resetText.trim() !== "REINICIAR")?"not-allowed":"pointer",
+                opacity:(resetBusy || resetText.trim() !== "REINICIAR")?0.55:1,
+                background:"#C2410C",color:"#fff",border:"none"}}>
+              {resetBusy ? "Reseteando..." : "Resetear progreso"}
+            </button>
+          </div>
+        </div>
+        {resetMsg && <p style={{fontSize:12,color:resetMsg.startsWith("Error")?"#C0392B":"#7C2D12",margin:"10px 0 0"}}>{resetMsg}</p>}
+      </div>
 
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {users.map(u => (
