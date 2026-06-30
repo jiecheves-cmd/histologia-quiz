@@ -294,6 +294,21 @@ async function loadDetails(load, summaryIds) {
     return [];
   }
 }
+
+function applyProgressReset(resetAt) {
+  if (!resetAt || localStorage.getItem("histo_progress_reset_seen") === resetAt) return;
+  Object.keys(localStorage).forEach(key => {
+    if (
+      key === "histo_hall_of_fame" ||
+      key.startsWith("histo_streak_") ||
+      key.startsWith("histo_last_session_") ||
+      key.startsWith("histo_seen_")
+    ) {
+      localStorage.removeItem(key);
+    }
+  });
+  localStorage.setItem("histo_progress_reset_seen", resetAt);
+}
 // ─── APP ──────────────────────────────────────────────────────────────────────
 const LEVELS = [
   { level: 1, title: "🔬 Aprendiz", xp: 0, coverage: 0 },
@@ -319,7 +334,10 @@ const [answeredUnique, setAnsweredUnique] = useState(0);
   const { save, load, list }  = useStorage();
 
 useEffect(() => {
-  migrateOldSessions(load, save).then(() => {
+  load("histo_progress_reset_at", null, true).then(resetAt => {
+    applyProgressReset(resetAt);
+    return migrateOldSessions(load, save);
+  }).then(() => {
     Promise.all([
       loadAllQuestions(load, DEFAULT_DB),
       load("histo_users", DEFAULT_USERS, true),
