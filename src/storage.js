@@ -38,5 +38,22 @@ export function useStorage() {
     }
   }
 
-  return { save, load }
+  const list = async (prefix, shared = false) => {
+    try {
+      const storePrefix = shared ? 'shared__' + prefix : 'private__' + prefix
+      const { data, error } = await supabase
+        .from('histo_store')
+        .select('storage_key,value')
+        .like('storage_key', storePrefix + '%')
+      if (error || !data) return []
+      return data.map(row => ({
+        key: row.storage_key.slice((shared ? 'shared__' : 'private__').length),
+        value: JSON.parse(row.value)
+      }))
+    } catch (e) {
+      return []
+    }
+  }
+
+  return { save, load, list }
 }

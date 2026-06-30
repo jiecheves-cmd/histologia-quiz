@@ -188,7 +188,6 @@ async function saveSession(sessionData, save) {
   };
   await save("histo_summary_" + id, summary, true);
   await save("histo_detail_" + id, detail, false);
-  await save("histo_summary_keys", null, true); // trigger index update
   return { summary, detail };
 }
 
@@ -200,7 +199,10 @@ async function migrateOldSessions(load, save) {
     
     // Cargar sesiones antiguas
     const oldSessions = await load("histo_sessions", [], true);
-    if (!oldSessions || oldSessions.length === 0) return;
+    if (!oldSessions || oldSessions.length === 0) {
+      await save("histo_migration_done", true, true);
+      return;
+    }
     
     // Migrar cada sesión al nuevo formato
     const newKeys = [];
@@ -231,26 +233,47 @@ async function migrateOldSessions(load, save) {
     console.error("Error en migración:", e);
   }
 }
-async function loadSummaries(load) {
+function oldSessionSummary(s) {
+  return {
+    id: s.id || s.date,
+    student: s.student,
+    date: s.date,
+    points: s.points || 0,
+    bonuses: s.bonuses || 0,
+    correct: (s.answers||[]).filter(a => a.correct).length,
+    total: (s.answers||[]).length,
+    durationMs: s.durationMs || 0,
+    filter: s.filter || "todas"
+  };
+}
+
+async function loadSummaries(load, list) {
   try {
+    const summariesById = new Map();
+    const addSummary = s => {
+      if (s && s.id && !summariesById.has(s.id)) summariesById.set(s.id, s);
+    };
+
     const keys = await load("histo_summary_keys", [], true);
-    if (!keys || keys.length === 0) {
-      // Intentar cargar formato antiguo
-      const old = await load("histo_sessions", [], true);
-      return old.map(s => ({
-        id: s.date,
-        student: s.student,
-        date: s.date,
-        points: s.points || 0,
-        bonuses: s.bonuses || 0,
-        correct: (s.answers||[]).filter(a => a.correct).length,
-        total: (s.answers||[]).length,
-        durationMs: s.durationMs || 0,
-        filter: s.filter || "todas"
-      }));
+    if (Array.isArray(keys) && keys.length > 0) {
+      const indexed = await Promise.all(keys.map(id => load("histo_summary_" + id, null, true)));
+      indexed.forEach(addSummary);
     }
-    const summaries = await Promise.all(keys.map(id => load("histo_summary_" + id, null, true)));
-    return summaries.filter(Boolean);
+
+    if (list) {
+      const listed = await list("histo_summary_", true);
+      listed.forEach(item => addSummary(item.value));
+    }
+
+    const old = await load("histo_sessions", [], true);
+    if (Array.isArray(old)) {
+      old.forEach(s => {
+        const migratedId = s.date + "_migrated";
+        if (!summariesById.has(migratedId)) addSummary(oldSessionSummary(s));
+      });
+    }
+
+    return [...summariesById.values()].sort((a, b) => new Date(a.date) - new Date(b.date));
   } catch(e) {
     return [];
   }
@@ -258,7 +281,14 @@ async function loadSummaries(load) {
 
 async function loadDetails(load, summaryIds) {
   try {
-    const details = await Promise.all(summaryIds.map(id => load("histo_detail_" + id, null, false)));
+    const old = await load("histo_sessions", [], true);
+    const oldSessions = Array.isArray(old) ? old : [];
+    const details = await Promise.all(summaryIds.map(async id => {
+      const detail = await load("histo_detail_" + id, null, false);
+      if (detail) return detail;
+      const oldSession = oldSessions.find(s => s.id === id || s.date === id || s.date + "_migrated" === id);
+      return oldSession ? { id, answers: oldSession.answers || [] } : null;
+    }));
     return details.filter(Boolean);
   } catch(e) {
     return [];
@@ -286,14 +316,14 @@ const [answeredUnique, setAnsweredUnique] = useState(0);
   const [currentUser, setCurrentUser] = useState(null);
   const [tab, setTab]         = useState("alumno");
   const [loaded, setLoaded]   = useState(false);
-  const { save, load }        = useStorage();
+  const { save, load, list }  = useStorage();
 
 useEffect(() => {
   migrateOldSessions(load, save).then(() => {
     Promise.all([
       loadAllQuestions(load, DEFAULT_DB),
       load("histo_users", DEFAULT_USERS, true),
-      loadSummaries(load)
+      loadSummaries(load, list)
     ])
     .then(([d, u, s]) => {
       setDb(d);
@@ -562,7 +592,7 @@ function StudentMode({ db, studentName }) {
 const [answeredUnique, setAnsweredUnique] = useState(0);
 
 useEffect(() => {
-  loadSummaries(load).then(setSessions);
+  loadSummaries(load, list).then(setSessions);
 }, []);
   const [studentTab, setStudentTab] = useState("inicio");
   const [phase, setPhase]           = useState("config");
@@ -577,7 +607,7 @@ useEffect(() => {
   const [answers, setAnswers]       = useState([]);
   const [sessionStart, setSessionStart]   = useState(null);
   const [questionStart, setQuestionStart] = useState(null);
-  const { save, load } = useStorage();
+  const { save, load, list } = useStorage();
 
   const ranking = Object.values(
   sessions.reduce((acc, s) => {
@@ -684,7 +714,7 @@ useEffect(() => {
   document.head.appendChild(script);
 }, [studentTab, phase, sessions, db]);
   const buildSmartSession = async () => {
-  const allSummaries = await loadSummaries(load);
+  const allSummaries = await loadSummaries(load, list);
   const mySummaries = allSummaries.filter(s => s.student === studentName);
   const myDetails = await loadDetails(load, mySummaries.map(s => s.id));
   const myAnswers = myDetails.flatMap(s => s.answers || []);
@@ -818,7 +848,8 @@ save(seenKey, newSeen.length >= pool.length ? [] : newSeen);
       // Actualizar índice de resúmenes
       const existingKeys = await load("histo_summary_keys", [], true);
       const keysArray = Array.isArray(existingKeys) ? existingKeys : [];
-      await save("histo_summary_keys", [...keysArray, summary.id], true);
+      const updatedKeys = [...new Set([...keysArray, summary.id])];
+      await save("histo_summary_keys", updatedKeys, true);
       const today = new Date().toISOString().split("T")[0];
 const lastDay = localStorage.getItem("histo_last_session_" + studentName);
 const currentStreak = parseInt(localStorage.getItem("histo_streak_" + studentName) || "0");
@@ -863,7 +894,7 @@ if (phase === "config") {
 
       {/* INICIO */}
       {studentTab==="inicio" && (
-  <div style={{display:"grid",gridTemplateColumns:"minmax(0,2fr) 360px",gap:28,alignItems:"start",gridTemplateColumns:window.innerWidth<768?"1fr":"minmax(0,2fr) 360px"}}>
+  <div style={{display:"grid",gap:28,alignItems:"start",gridTemplateColumns:window.innerWidth<768?"1fr":"minmax(0,2fr) 360px"}}>
     
     {/* Panel principal */}
     <div style={{
@@ -1419,9 +1450,9 @@ if (phase === "config") {
 function ResultsWithRanking({ studentName, answers, questions, sessionStart, correct, pct, points, bonuses, ptAciertos, ptErrores, onNewSession, onRepeat }) {
   const [sessions, setSessions] = useState([]);
   const [rankPeriod, setRankPeriod] = useState("week");
-  const { load } = useStorage();
+  const { load, list } = useStorage();
 
-  useEffect(() => { loadSummaries(load).then(setSessions); }, []);
+  useEffect(() => { loadSummaries(load, list).then(setSessions); }, []);
 
   const medals = ["🥇","🥈","🥉"];
   const periodLabel = { week:"Esta semana", month:"Este mes", year:"Este año" };
@@ -1957,10 +1988,10 @@ const [showAll, setShowAll] = useState(false);
   const [form, setForm] = useState({difficulty:"básico",topic:TOPICS[0],question:"",options:["","","",""],answer:0,explanation:"",image:null,link:""});
   const fileRef    = useRef();
   const explImgRef = useRef();
-  const { save, load } = useStorage();
+  const { save, load, list } = useStorage();
 
   useEffect(() => { 
-    loadSummaries(load).then(async summaries => {
+    loadSummaries(load, list).then(async summaries => {
       setSessions(summaries);
       const details = await loadDetails(load, summaries.map(s => s.id));
       setSessionDetails(details);
