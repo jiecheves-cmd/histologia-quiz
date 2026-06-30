@@ -625,6 +625,7 @@ useEffect(() => {
   const [answers, setAnswers]       = useState([]);
   const [sessionStart, setSessionStart]   = useState(null);
   const [questionStart, setQuestionStart] = useState(null);
+  const [showRadarModal, setShowRadarModal] = useState(false);
   const { save, load, list } = useStorage();
 
   const ranking = Object.values(
@@ -692,45 +693,58 @@ const coverageMissing = nextLevel
 // ─── RADAR CHART ──────────────────────────────────────────────────────────────
 useEffect(() => {
   if (studentTab !== "inicio" || phase !== "config") return;
+  const renderRadar = async () => {
+    const renderChart = async (canvasId, large = false) => {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas || !window.Chart) return;
+      if (canvas._chartInstance) { canvas._chartInstance.destroy(); canvas._chartInstance = null; }
+
+      const mySummaries = sessions.filter(s => s.student === studentName);
+      const myDetails = await loadDetails(load, mySummaries.map(s => s.id));
+      const allAnswers = myDetails.flatMap(s => s.answers || []);
+      const topics = [...new Set([...TOPICS, ...db.map(q => q.topic).filter(Boolean)])];
+      const topicData = {};
+      topics.forEach(t => { topicData[t] = {correct:0,total:0}; });
+      allAnswers.forEach(a => {
+        const q = db.find(x => x.id === a.questionId);
+        if (!q || !topicData[q.topic]) return;
+        topicData[q.topic].total++;
+        if (a.correct) topicData[q.topic].correct++;
+      });
+      const values = topics.map(t => topicData[t].total ? Math.round(topicData[t].correct/topicData[t].total*100) : 0);
+
+      canvas._chartInstance = new window.Chart(canvas, {
+        type: "radar",
+        data: {
+          labels: topics,
+          datasets: [
+            { label:"Tu nivel", data:values, backgroundColor:"rgba(108,76,255,0.2)", borderColor:"#6C4CFF", borderWidth:large?3:2, pointBackgroundColor:"#6C4CFF", pointRadius:large?5:3 },
+            { label:"Máximo", data:topics.map(()=>100), backgroundColor:"rgba(108,76,255,0.05)", borderColor:"rgba(108,76,255,0.2)", borderWidth:1, pointRadius:0 }
+          ]
+        },
+        options: {
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{ legend:{ display:false } },
+          scales:{ r:{
+            min:0, max:100,
+            ticks:{ stepSize:25, font:{size:large?12:9}, color:"#9CA3AF", backdropColor:"transparent" },
+            pointLabels:{ font:{size:large?13:9, weight:large?"600":"400"}, color:"#6B7280" },
+            grid:{ color:"rgba(108,76,255,0.12)" },
+            angleLines:{ color:"rgba(108,76,255,0.18)" }
+          } }
+        }
+      });
+    };
+    await renderChart("radarChart", false);
+    if (showRadarModal) await renderChart("radarChartLarge", true);
+  };
+  if (window.Chart) { renderRadar(); return; }
   const script = document.createElement("script");
   script.src = "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js";
-  script.onload = async () => {
-    const canvas = document.getElementById("radarChart");
-    if (!canvas) return;
-    if (canvas._chartInstance) { canvas._chartInstance.destroy(); canvas._chartInstance = null; }
-    Chart.helpers && Chart.helpers.each(Chart.instances, (instance) => { if (instance.canvas === canvas) instance.destroy(); });
-    const mySummaries = sessions.filter(s => s.student === studentName);
-    const myDetails = await loadDetails(load, mySummaries.map(s => s.id));
-    const allAnswers = myDetails.flatMap(s => s.answers || []);
-    const topicData = {};
-    db.forEach(q => { if (!topicData[q.topic]) topicData[q.topic] = {correct:0,total:0}; });
-    allAnswers.forEach(a => {
-      const q = db.find(x => x.id === a.questionId);
-      if (!q || !topicData[q.topic]) return;
-      topicData[q.topic].total++;
-      if (a.correct) topicData[q.topic].correct++;
-    });
-    const topics = Object.keys(topicData).slice(0, 8);
-    const values = topics.map(t => topicData[t].total ? Math.round(topicData[t].correct/topicData[t].total*100) : 0);
-    const chart = new window.Chart(canvas, {
-      type: "radar",
-      data: {
-        labels: topics,
-        datasets: [
-          { label:"Tu nivel", data:values, backgroundColor:"rgba(108,76,255,0.2)", borderColor:"#6C4CFF", borderWidth:2, pointBackgroundColor:"#6C4CFF", pointRadius:4 },
-          { label:"Máximo", data:topics.map(()=>100), backgroundColor:"rgba(108,76,255,0.05)", borderColor:"rgba(108,76,255,0.2)", borderWidth:1, pointRadius:0 }
-        ]
-      },
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ display:false } },
-        scales:{ r:{ min:0, max:100, ticks:{ stepSize:25, font:{size:10}, color:"#9CA3AF", backdropColor:"transparent" }, pointLabels:{ font:{size:10}, color:"#6B7280" }, grid:{ color:"rgba(108,76,255,0.1)" }, angleLines:{ color:"rgba(108,76,255,0.15)" } } }
-      }
-    });
-    canvas._chartInstance = chart;
-  };
+  script.onload = renderRadar;
   document.head.appendChild(script);
-}, [studentTab, phase, sessions, db]);
+}, [studentTab, phase, sessions, db, showRadarModal]);
   const buildSmartSession = async () => {
   const allSummaries = await loadSummaries(load, list);
   const mySummaries = allSummaries.filter(s => s.student === studentName);
@@ -1203,10 +1217,16 @@ if (phase === "config") {
 </div>
 
       {/* Radar de dominio */}
-      <div style={{background:"var(--color-background-primary)",border:"0.5px solid var(--color-border-tertiary)",borderRadius:20,padding:"1.25rem"}}>
-        <p style={{fontSize:13,fontWeight:500,color:"var(--color-text-primary)",margin:"0 0 4px"}}>Tu mapa de dominio</p>
-        <p style={{fontSize:12,color:"var(--color-text-secondary)",margin:"0 0 1rem"}}>Nivel por área histológica</p>
-        <div style={{position:"relative",width:"100%",height:260}}>
+      <div onClick={() => setShowRadarModal(true)}
+        style={{background:"var(--color-background-primary)",border:"0.5px solid var(--color-border-tertiary)",borderRadius:20,padding:"1.25rem",cursor:"zoom-in"}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start"}}>
+          <div>
+            <p style={{fontSize:13,fontWeight:500,color:"var(--color-text-primary)",margin:"0 0 4px"}}>Tu mapa de dominio</p>
+            <p style={{fontSize:12,color:"var(--color-text-secondary)",margin:"0 0 1rem"}}>Nivel por área histológica</p>
+          </div>
+          <span style={{fontSize:11,color:"#6C4CFF",fontWeight:700,whiteSpace:"nowrap"}}>Ampliar</span>
+        </div>
+        <div style={{position:"relative",width:"100%",height:300}}>
           <canvas id="radarChart" role="img" aria-label="Gráfico radar de dominio por tejido"></canvas>
         </div>
         <div style={{display:"flex",gap:12,marginTop:12}}>
@@ -1218,6 +1238,38 @@ if (phase === "config") {
           </span>
         </div>
       </div>
+
+      {showRadarModal && (
+        <div onClick={() => setShowRadarModal(false)}
+          style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(26,16,96,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:window.innerWidth<768?12:28}}>
+          <div onClick={e => e.stopPropagation()}
+            style={{width:"min(1100px,100%)",maxHeight:"92vh",overflow:"auto",background:"#fff",borderRadius:24,padding:window.innerWidth<768?18:28,boxShadow:"0 28px 90px rgba(26,16,96,0.35)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start",marginBottom:12}}>
+              <div>
+                <h3 style={{fontSize:20,fontWeight:800,color:"var(--color-text-primary)",margin:"0 0 4px"}}>Tu mapa de dominio</h3>
+                <p style={{fontSize:13,color:"var(--color-text-secondary)",margin:0}}>Todas las áreas histológicas del banco de preguntas</p>
+              </div>
+              <button onClick={() => setShowRadarModal(false)}
+                style={{fontSize:13,padding:"7px 12px",borderRadius:"var(--border-radius-md)",cursor:"pointer",
+                  background:"transparent",color:"var(--color-text-secondary)",border:"0.5px solid var(--color-border-tertiary)"}}>
+                Cerrar
+              </button>
+            </div>
+            <div style={{position:"relative",width:"100%",height:window.innerWidth<768?520:680}}>
+              <canvas id="radarChartLarge" role="img" aria-label="Gráfico radar ampliado de dominio por tejido"></canvas>
+            </div>
+            <div style={{display:"flex",gap:14,marginTop:12,flexWrap:"wrap"}}>
+              <span style={{fontSize:12,display:"flex",alignItems:"center",gap:5,color:"var(--color-text-secondary)"}}>
+                <span style={{width:12,height:12,borderRadius:3,background:"rgba(108,76,255,0.5)",display:"inline-block"}}></span>Tu nivel
+              </span>
+              <span style={{fontSize:12,display:"flex",alignItems:"center",gap:5,color:"var(--color-text-secondary)"}}>
+                <span style={{width:12,height:12,borderRadius:3,background:"rgba(108,76,255,0.15)",display:"inline-block"}}></span>Máximo
+              </span>
+              <span style={{fontSize:12,color:"var(--color-text-secondary)"}}>Los temas sin respuestas aparecen con 0%.</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   </div>
       )}
