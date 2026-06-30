@@ -2116,7 +2116,7 @@ const text = data.text;
 
     const qStats = {};
     allA.forEach(a => {
-      if (!qStats[a.questionId]) qStats[a.questionId]={question:a.question,difficulty:a.difficulty,topic:a.topic||"",total:0,correct:0};
+      if (!qStats[a.questionId]) qStats[a.questionId]={questionId:a.questionId,question:a.question,difficulty:a.difficulty,topic:a.topic||"",total:0,correct:0};
       qStats[a.questionId].total++;
       if (a.correct) qStats[a.questionId].correct++;
     });
@@ -2182,6 +2182,7 @@ const text = data.text;
             <div style={{background:"var(--color-background-primary)",border:"0.5px solid var(--color-border-tertiary)",borderRadius:"var(--border-radius-lg)",padding:"1rem 1.25rem",marginBottom:16}}>
               <p style={{fontSize:13,fontWeight:500,margin:"0 0 14px",color:"var(--color-text-primary)"}}>Preguntas más falladas</p>
               {qList.slice(0,8).map((q,i) => {
+                const sourceQuestion = db.find(x => String(x.id) === String(q.questionId));
                 const pct = Math.round(q.correct/q.total*100);
                 const isRed = pct < 40;
                 const isAmber = pct >= 40 && pct < 60;
@@ -2190,15 +2191,25 @@ const text = data.text;
                 const badgeColor = isRed?"#A32D2D":isAmber?"#854F0B":"#3B6D11";
                 const badgeText = isRed?"Crítica":isAmber?"Revisar":"OK";
                 return (
-                  <div key={i} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-                    <div style={{fontSize:12,color:"var(--color-text-secondary)",width:180,flexShrink:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}
-                      title={q.question}>{q.question}</div>
+                  <button key={i} onClick={() => sourceQuestion && openEdit(sourceQuestion)} disabled={!sourceQuestion}
+                    title={sourceQuestion ? "Editar: " + sourceQuestion.question : q.question}
+                    style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,width:"100%",padding:"7px 8px",
+                      borderRadius:"var(--border-radius-md)",border:"0.5px solid transparent",
+                      background:"transparent",cursor:sourceQuestion?"pointer":"default",textAlign:"left",
+                      opacity:sourceQuestion?1:0.65}}>
+                    <div style={{fontSize:12,color:"var(--color-text-secondary)",minWidth:260,flex:"0 1 420px",
+                      whiteSpace:"normal",overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",lineHeight:1.25}}>
+                      {sourceQuestion?.question || q.question}
+                    </div>
                     <div style={{flex:1,height:8,background:"var(--color-background-secondary)",borderRadius:4,overflow:"hidden"}}>
                       <div style={{width:pct+"%",height:"100%",background:color,borderRadius:4}} />
                     </div>
                     <div style={{fontSize:12,fontWeight:500,color:color,width:36,textAlign:"right"}}>{pct}%</div>
                     <span style={{fontSize:10,padding:"2px 8px",borderRadius:10,fontWeight:500,background:badgeBg,color:badgeColor,flexShrink:0}}>{badgeText}</span>
-                  </div>
+                    <span style={{fontSize:11,color:sourceQuestion?"#6C4CFF":"var(--color-text-secondary)",fontWeight:600,width:44,textAlign:"right",flexShrink:0}}>
+                      {sourceQuestion ? "Editar" : "No encontrada"}
+                    </span>
+                  </button>
                 );
               })}
             </div>
