@@ -626,6 +626,7 @@ useEffect(() => {
   const [sessionStart, setSessionStart]   = useState(null);
   const [questionStart, setQuestionStart] = useState(null);
   const [showRadarModal, setShowRadarModal] = useState(false);
+  const [showRankingModal, setShowRankingModal] = useState(false);
   const [sessionMode, setSessionMode] = useState("practice");
   const [learningSnapshot, setLearningSnapshot] = useState({weakTopics:[], dueCount:0, errorCount:0, lowConfidenceCount:0, questionsToday:0, sessionsToday:0});
   const { save, load, list } = useStorage();
@@ -1257,12 +1258,14 @@ if (phase === "config") {
 
     {/* Panel lateral */}
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <div style={{
+      <div onClick={() => setShowRankingModal(true)}
+        style={{
         background:"linear-gradient(135deg,#6C4CFF,#8B5CF6)",
         color:"#FFFFFF",
         borderRadius:28,
         padding:24,
-        boxShadow:"0 24px 60px rgba(108,76,255,0.28)"
+        boxShadow:"0 24px 60px rgba(108,76,255,0.28)",
+        cursor:"pointer"
       }}>
         <div style={{fontSize:13,fontWeight:700,opacity:0.86,marginBottom:10}}>
           TU PROGRESO
@@ -1289,7 +1292,7 @@ if (phase === "config") {
           {myRank ? "#" + myRank : "—"}
         </div>
         <div style={{fontSize:14,opacity:0.9,marginTop:8}}>
-          posición en el ranking
+          posición en el ranking global
         </div>
         <div style={{
   marginTop:18,
@@ -1335,6 +1338,62 @@ if (phase === "config") {
   </div>
 )}
 </div>
+
+      {showRankingModal && (
+        <div onClick={() => setShowRankingModal(false)}
+          style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(26,16,96,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:window.innerWidth<768?12:28}}>
+          <div onClick={e => e.stopPropagation()}
+            style={{width:"min(520px,100%)",background:"#fff",borderRadius:24,padding:24,boxShadow:"0 28px 90px rgba(26,16,96,0.35)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start",marginBottom:18}}>
+              <div>
+                <h3 style={{fontSize:20,fontWeight:800,color:"var(--color-text-primary)",margin:"0 0 4px"}}>Ranking global</h3>
+                <p style={{fontSize:13,color:"var(--color-text-secondary)",margin:0}}>Top 5 por HistoXP acumulado</p>
+              </div>
+              <button onClick={() => setShowRankingModal(false)}
+                style={{fontSize:13,padding:"7px 12px",borderRadius:"var(--border-radius-md)",cursor:"pointer",
+                  background:"transparent",color:"var(--color-text-secondary)",border:"0.5px solid var(--color-border-tertiary)"}}>
+                Cerrar
+              </button>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {ranking.slice(0,5).map((r,i) => {
+                const isMe = r.name === studentName;
+                const medals = ["🥇","🥈","🥉"];
+                return (
+                  <div key={r.name} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",
+                    borderRadius:14,background:isMe?"#F0EAF9":"#F8F7FC",border:"0.5px solid "+(isMe?"#C9A8F0":"var(--color-border-tertiary)")}}>
+                    <span style={{fontSize:i<3?22:13,minWidth:32,textAlign:"center",fontWeight:800,color:"#6C4CFF"}}>{i<3?medals[i]:(i+1)+"."}</span>
+                    <Avatar name={r.name} size={30} />
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:isMe?800:600,color:"var(--color-text-primary)"}}>{r.name}{isMe?" (tú)":""}</div>
+                    </div>
+                    <div style={{fontSize:13,fontWeight:800,color:"#6C4CFF"}}>{r.points.toFixed(2)} XP</div>
+                  </div>
+                );
+              })}
+              {ranking.length === 0 && (
+                <div style={{padding:"1.25rem",textAlign:"center",color:"var(--color-text-secondary)",background:"#F8F7FC",borderRadius:14}}>
+                  Aún no hay datos de ranking.
+                </div>
+              )}
+              {myRank > 5 && (
+                <>
+                  <div style={{height:1,background:"var(--color-border-tertiary)",margin:"6px 0"}} />
+                  <div style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",
+                    borderRadius:14,background:"#F0EAF9",border:"0.5px solid #C9A8F0"}}>
+                    <span style={{fontSize:13,minWidth:32,textAlign:"center",fontWeight:800,color:"#6C4CFF"}}>{myRank}.</span>
+                    <Avatar name={studentName} size={30} />
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:800,color:"var(--color-text-primary)"}}>{studentName} (tú)</div>
+                    </div>
+                    <div style={{fontSize:13,fontWeight:800,color:"#6C4CFF"}}>{myPoints.toFixed(2)} XP</div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Radar de dominio */}
       <div onClick={() => setShowRadarModal(true)}
