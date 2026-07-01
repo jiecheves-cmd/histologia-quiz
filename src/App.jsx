@@ -627,7 +627,7 @@ useEffect(() => {
   const [questionStart, setQuestionStart] = useState(null);
   const [showRadarModal, setShowRadarModal] = useState(false);
   const [sessionMode, setSessionMode] = useState("practice");
-  const [learningSnapshot, setLearningSnapshot] = useState({weakTopics:[], dueCount:0, errorCount:0, lowConfidenceCount:0, questionsToday:0, sessionsToday:0, examToday:false});
+  const [learningSnapshot, setLearningSnapshot] = useState({weakTopics:[], dueCount:0, errorCount:0, lowConfidenceCount:0, questionsToday:0, sessionsToday:0});
   const { save, load, list } = useStorage();
 
   const ranking = Object.values(
@@ -695,7 +695,7 @@ const coverageMissing = nextLevel
 useEffect(() => {
   const mySummaries = sessions.filter(s => s.student === studentName);
   if (mySummaries.length === 0) {
-    setLearningSnapshot({weakTopics:[], dueCount:db.length, errorCount:0, lowConfidenceCount:0, questionsToday:0, sessionsToday:0, examToday:false});
+    setLearningSnapshot({weakTopics:[], dueCount:db.length, errorCount:0, lowConfidenceCount:0, questionsToday:0, sessionsToday:0});
     return;
   }
   loadDetails(load, mySummaries.map(s => s.id)).then(details => {
@@ -728,8 +728,7 @@ useEffect(() => {
       errorCount: db.filter(q => qStats[q.id] && qStats[q.id].correct < qStats[q.id].total).length,
       lowConfidenceCount: db.filter(q => qStats[q.id]?.lowConf > 0).length,
       questionsToday: todaySummaries.reduce((sum, s) => sum + (s.total || 0), 0),
-      sessionsToday: todaySummaries.length,
-      examToday: todaySummaries.some(s => s.filter === "modo examen")
+      sessionsToday: todaySummaries.length
     });
   });
 }, [sessions, db, studentName]);
@@ -1075,28 +1074,30 @@ if (phase === "config") {
       {/* Misiones diarias */}
       <div style={{marginBottom:24}}>
         <p style={{fontSize:14,fontWeight:700,color:"var(--color-text-primary)",margin:"0 0 10px"}}>
-          Misiones diarias
+          Misión diaria
         </p>
-        <div style={{display:"grid",gridTemplateColumns:window.innerWidth<768?"1fr":"repeat(3,1fr)",gap:10}}>
-          {[
-            {title:"Sesión del día", done:learningSnapshot.sessionsToday > 0, value:Math.min(1, learningSnapshot.sessionsToday), target:1, detail:"Completa cualquier sesión"},
-            {title:"20 preguntas", done:learningSnapshot.questionsToday >= 20, value:Math.min(20, learningSnapshot.questionsToday), target:20, detail:"Suma práctica diaria"},
-            {title:"Modo examen", done:learningSnapshot.examToday, value:learningSnapshot.examToday?1:0, target:1, detail:"Haz un simulacro sin pistas"}
-          ].map(m => {
-            const pct = Math.round((m.value / m.target) * 100);
+        <div style={{background:"#FFFFFF",border:"1px solid var(--color-border-tertiary)",borderRadius:16,padding:"14px 16px"}}>
+          {(() => {
+            const target = 20;
+            const value = Math.min(target, learningSnapshot.questionsToday);
+            const done = value >= target;
+            const pct = Math.round((value / target) * 100);
             return (
-              <div key={m.title} style={{background:"#FFFFFF",border:"1px solid var(--color-border-tertiary)",borderRadius:16,padding:"12px 14px"}}>
+              <>
                 <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",marginBottom:8}}>
-                  <div style={{fontSize:13,fontWeight:800,color:"var(--color-text-primary)"}}>{m.title}</div>
-                  <span style={{fontSize:12,fontWeight:800,color:m.done?"#1D9E75":"#BA7517"}}>{m.done?"Hecha":"Pendiente"}</span>
+                  <div>
+                    <div style={{fontSize:14,fontWeight:800,color:"var(--color-text-primary)"}}>Responder 20 preguntas</div>
+                    <div style={{fontSize:12,color:"var(--color-text-secondary)",marginTop:2}}>Suma cualquier sesión de práctica o repaso inteligente.</div>
+                  </div>
+                  <span style={{fontSize:12,fontWeight:800,color:done?"#1D9E75":"#BA7517"}}>{done?"Hecha":"Pendiente"}</span>
                 </div>
-                <div style={{height:7,borderRadius:999,background:"#F1F2F6",overflow:"hidden",marginBottom:7}}>
-                  <div style={{width:pct+"%",height:"100%",background:m.done?"#1D9E75":"#F5C518"}} />
+                <div style={{height:8,borderRadius:999,background:"#F1F2F6",overflow:"hidden",marginBottom:7}}>
+                  <div style={{width:pct+"%",height:"100%",background:done?"#1D9E75":"#F5C518"}} />
                 </div>
-                <div style={{fontSize:11,color:"var(--color-text-secondary)"}}>{m.detail} · {m.value}/{m.target}</div>
-              </div>
+                <div style={{fontSize:11,color:"var(--color-text-secondary)"}}>{value}/{target} preguntas hoy</div>
+              </>
             );
-          })}
+          })()}
         </div>
       </div>
 
