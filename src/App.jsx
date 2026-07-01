@@ -591,17 +591,23 @@ function buildLeagueGroups(allSessions, allUsers, currentWeekKey) {
   return groups;
 }
 
-function saveHallOfFame(weekKey, winner, xp, save) {
-  const key = "histo_hall_of_fame";
-  const existing = JSON.parse(localStorage.getItem(key) || "[]");
-  if (existing.find(e => e.weekKey === weekKey)) return;
-  existing.push({ weekKey, winner, xp, label: getWeekLabel(weekKey) });
-  existing.sort((a,b) => b.weekKey.localeCompare(a.weekKey));
-  localStorage.setItem(key, JSON.stringify(existing));
-}
-
-function getHallOfFame() {
-  return JSON.parse(localStorage.getItem("histo_hall_of_fame") || "[]");
+function buildHallOfFame(allSessions) {
+  const currentWeekKey = getWeekKey();
+  const weekly = {};
+  allSessions.forEach(s => {
+    if (!s.date || !s.student) return;
+    const weekKey = getWeekKey(new Date(s.date));
+    if (weekKey === currentWeekKey) return;
+    if (!weekly[weekKey]) weekly[weekKey] = {};
+    weekly[weekKey][s.student] = (weekly[weekKey][s.student] || 0) + (s.points || 0);
+  });
+  return Object.entries(weekly)
+    .map(([weekKey, pointsByStudent]) => {
+      const [winner, xp] = Object.entries(pointsByStudent).sort((a,b) => b[1] - a[1])[0] || [];
+      return winner ? { weekKey, winner, xp, label: getWeekLabel(weekKey) } : null;
+    })
+    .filter(Boolean)
+    .sort((a,b) => b.weekKey.localeCompare(a.weekKey));
 }
 // ─── STUDENT MODE ─────────────────────────────────────────────────────────────
 function StudentMode({ db, studentName }) {
@@ -997,12 +1003,7 @@ if (phase === "config") {
   const allSessions = sessions;
   const groups = buildLeagueGroups(allSessions, [], currentWeekKey);
   const myGroup = groups.find(g => g.find(s => s.name === studentName)) || [];
-  const hallOfFame = getHallOfFame();
-
-  // Cerrar liga anterior si cambió la semana
-  const lastWeekKey = getWeekKey(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
-  const lastWeekWinner = groups.find(g => g.find(s => s.name === studentName))?.[0];
-  if (lastWeekWinner && lastWeekWinner.weekXP > 0) saveHallOfFame(lastWeekKey, lastWeekWinner.name, lastWeekWinner.weekXP, save);
+  const hallOfFame = buildHallOfFame(allSessions);
 
   return (
     <div>
