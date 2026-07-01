@@ -626,6 +626,8 @@ useEffect(() => {
   const [sessionStart, setSessionStart]   = useState(null);
   const [questionStart, setQuestionStart] = useState(null);
   const [showRadarModal, setShowRadarModal] = useState(false);
+  const [sessionMode, setSessionMode] = useState("practice");
+  const [learningSnapshot, setLearningSnapshot] = useState({weakTopics:[], dueCount:0, errorCount:0, lowConfidenceCount:0, questionsToday:0, sessionsToday:0, examToday:false});
   const { save, load, list } = useStorage();
 
   const ranking = Object.values(
@@ -689,6 +691,49 @@ useEffect(() => {
 const coverageMissing = nextLevel
   ? Math.max(0, nextLevel.coverage - coveragePct)
   : 0;
+
+useEffect(() => {
+  const mySummaries = sessions.filter(s => s.student === studentName);
+  if (mySummaries.length === 0) {
+    setLearningSnapshot({weakTopics:[], dueCount:db.length, errorCount:0, lowConfidenceCount:0, questionsToday:0, sessionsToday:0, examToday:false});
+    return;
+  }
+  loadDetails(load, mySummaries.map(s => s.id)).then(details => {
+    const allAnswers = details.flatMap(s => s.answers || []);
+    const today = new Date().toISOString().split("T")[0];
+    const todaySummaries = mySummaries.filter(s => (s.date || "").slice(0,10) === today);
+    const qStats = {};
+    allAnswers.forEach(a => {
+      if (!qStats[a.questionId]) qStats[a.questionId] = {correct:0,total:0,lowConf:0,lastSeen:0};
+      qStats[a.questionId].total++;
+      if (a.correct) qStats[a.questionId].correct++;
+      if (a.confidence === 2) qStats[a.questionId].lowConf++;
+      qStats[a.questionId].lastSeen = Math.max(qStats[a.questionId].lastSeen, a.timeStamp || 0);
+    });
+    const topicStats = {};
+    db.forEach(q => { if (!topicStats[q.topic]) topicStats[q.topic] = {correct:0,total:0}; });
+    allAnswers.forEach(a => {
+      const q = db.find(x => x.id === a.questionId);
+      if (!q || !topicStats[q.topic]) return;
+      topicStats[q.topic].total++;
+      if (a.correct) topicStats[q.topic].correct++;
+    });
+    const weakTopics = Object.entries(topicStats)
+      .map(([topic, s]) => ({topic, pct:s.total ? Math.round(s.correct/s.total*100) : -1}))
+      .sort((a,b) => a.pct - b.pct)
+      .slice(0,3);
+    setLearningSnapshot({
+      weakTopics,
+      dueCount: db.filter(q => !qStats[q.id] || (qStats[q.id].correct / Math.max(qStats[q.id].total,1)) < 0.7 || qStats[q.id].lowConf > 0).length,
+      errorCount: db.filter(q => qStats[q.id] && qStats[q.id].correct < qStats[q.id].total).length,
+      lowConfidenceCount: db.filter(q => qStats[q.id]?.lowConf > 0).length,
+      questionsToday: todaySummaries.reduce((sum, s) => sum + (s.total || 0), 0),
+      sessionsToday: todaySummaries.length,
+      examToday: todaySummaries.some(s => s.filter === "modo examen")
+    });
+  });
+}, [sessions, db, studentName]);
+
   // ─── SESIÓN INTELIGENTE ────────────────────────────────────────────────────────
 // ─── RADAR CHART ──────────────────────────────────────────────────────────────
 useEffect(() => {
@@ -751,66 +796,55 @@ useEffect(() => {
   const myDetails = await loadDetails(load, mySummaries.map(s => s.id));
   const myAnswers = myDetails.flatMap(s => s.answers || []);
 
-  // Contar aciertos y fallos por pregunta
   const qStats = {};
   myAnswers.forEach(a => {
-    if (!qStats[a.questionId]) qStats[a.questionId] = { correct: 0, total: 0, lowConf: 0 };
+    if (!qStats[a.questionId]) qStats[a.questionId] = { correct: 0, total: 0, lowConf: 0, lastIndex: 0 };
     qStats[a.questionId].total++;
     if (a.correct) qStats[a.questionId].correct++;
     if (a.confidence === 2) qStats[a.questionId].lowConf++;
+    qStats[a.questionId].lastIndex = myAnswers.length;
   });
 
-  // Clasificar preguntas por prioridad
-  const never = db.filter(q => !qStats[q.id]);
-  const failed = db.filter(q => qStats[q.id] && (qStats[q.id].correct / qStats[q.id].total) < 0.5);
-  const lowConf = db.filter(q => qStats[q.id] && qStats[q.id].lowConf > 0 && !failed.find(f => f.id === q.id));
-  const rest = db.filter(q => qStats[q.id] && !failed.find(f => f.id === q.id) && !lowConf.find(f => f.id === q.id));
-
-  // Mezclar con prioridad y limitar a máx 3 por tema
   const topicCount = {};
-  const pick = (pool) => pool.sort(() => Math.random() - 0.5).filter(q => {
-    topicCount[q.topic] = (topicCount[q.topic] || 0);
-    if (topicCount[q.topic] >= 3) return false;
-    topicCount[q.topic]++;
-    return true;
-  });
+  const selected = db
+    .map(q => {
+      const s = qStats[q.id];
+      const accuracy = s ? s.correct / Math.max(s.total, 1) : 0;
+      let priority = 0;
+      if (!s) priority += 60;
+      if (s && accuracy < 0.7) priority += Math.round((1 - accuracy) * 55);
+      if (s?.lowConf) priority += 25 + s.lowConf * 4;
+      priority += Math.random() * 8;
+      return { ...q, _priority: priority };
+    })
+    .sort((a,b) => b._priority - a._priority)
+    .filter(q => {
+      topicCount[q.topic] = topicCount[q.topic] || 0;
+      if (topicCount[q.topic] >= 3) return false;
+      topicCount[q.topic]++;
+      return true;
+    })
+    .slice(0, 10);
 
-  const selected = [
-    ...pick(failed),
-    ...pick(never),
-    ...pick(lowConf),
-    ...pick(rest)
-  ].slice(0, 10);
-
-  // Barajar opciones
   return selected.map(q => {
     const idx = q.options.map((opt, i) => ({ opt, correct: i === q.answer }));
     idx.sort(() => Math.random() - 0.5);
-    return { ...q, options: idx.map(o => o.opt), answer: idx.findIndex(o => o.correct) };
+    const { _priority, ...clean } = q;
+    return { ...clean, options: idx.map(o => o.opt), answer: idx.findIndex(o => o.correct) };
   });
 };
 
 const smartTopics = () => {
-  const allAnswers = [];
-  const topicStats = {};
-  db.forEach(q => { if (!topicStats[q.topic]) topicStats[q.topic] = { correct: 0, total: 0 }; });
-  allAnswers.forEach(a => {
-    const q = db.find(q => q.id === a.questionId);
-    if (!q) return;
-    if (!topicStats[q.topic]) topicStats[q.topic] = { correct: 0, total: 0 };
-    topicStats[q.topic].total++;
-    if (a.correct) topicStats[q.topic].correct++;
-  });
-  return Object.entries(topicStats)
-    .map(([topic, s]) => ({ topic, pct: s.total ? Math.round(s.correct / s.total * 100) : -1 }))
-    .sort((a, b) => a.pct - b.pct)
-    .slice(0, 3);
+  return learningSnapshot.weakTopics.length
+    ? learningSnapshot.weakTopics
+    : TOPICS.slice(0, 3).map(topic => ({topic, pct:-1}));
 };
 
 const startSmart = async () => {
   const qs = await buildSmartSession();
   if (!qs.length) return;
   const now = Date.now();
+  setSessionMode("smart");
   setQuestions(qs); setCurrent(0); setSelected(null); setConfidence(null);
   setConfirmed(false); setAnswers([]); setSessionStart(now); setQuestionStart(now); setPhase("quiz");
 };
@@ -851,8 +885,53 @@ save(seenKey, newSeen.length >= pool.length ? [] : newSeen);
       return { ...q, options: idx.map(o => o.opt), answer: idx.findIndex(o => o.correct) };
     });
     const now = Date.now();
+    setSessionMode("practice");
     setQuestions(shuffled); setCurrent(0); setSelected(null); setConfidence(null);
     setConfirmed(false); setAnswers([]); setSessionStart(now); setQuestionStart(now); setPhase("quiz");
+  };
+
+  const startExam = async () => {
+    let pool = db.filter(q => {
+      const diffOk  = filter==="todas" || q.difficulty===filter;
+      const topicOk = selectedTopics.length===0 || selectedTopics.includes(q.topic);
+      return diffOk && topicOk;
+    });
+    if (!pool.length) return;
+    const batch = pool.sort(() => Math.random()-0.5).slice(0, Math.min(20, pool.length));
+    const shuffled = batch.map(q => {
+      const idx = q.options.map((opt, i) => ({ opt, correct: i===q.answer }));
+      idx.sort(() => Math.random()-0.5);
+      return { ...q, options: idx.map(o => o.opt), answer: idx.findIndex(o => o.correct) };
+    });
+    const now = Date.now();
+    setSessionMode("exam");
+    setQuestions(shuffled); setCurrent(0); setSelected(null); setConfidence(null);
+    setConfirmed(false); setAnswers([]); setSessionStart(now); setQuestionStart(now); setPhase("quiz");
+  };
+
+  const finishSession = async (finalAnswers) => {
+    const sc = calcSessionScore(finalAnswers);
+    const sessionData = {
+      student:studentName, date:new Date().toISOString(),
+      durationMs: Date.now() - (sessionStart||Date.now()),
+      filter: sessionMode==="exam" ? "modo examen" : sessionMode==="smart" ? "repaso inteligente" : filter,
+      answers: finalAnswers, points: sc.points, bonuses: sc.bonuses
+    };
+    const { summary } = await saveSession(sessionData, save);
+    setSessions(prev => [...prev, summary]);
+    const existingKeys = await load("histo_summary_keys", [], true);
+    const keysArray = Array.isArray(existingKeys) ? existingKeys : [];
+    const updatedKeys = [...new Set([...keysArray, summary.id])];
+    await save("histo_summary_keys", updatedKeys, true);
+    const today = new Date().toISOString().split("T")[0];
+    const lastDay = localStorage.getItem("histo_last_session_" + studentName);
+    const currentStreak = parseInt(localStorage.getItem("histo_streak_" + studentName) || "0");
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    const newStreak = lastDay === today ? currentStreak : lastDay === yesterday ? currentStreak + 1 : 1;
+    localStorage.setItem("histo_streak_" + studentName, String(newStreak));
+    localStorage.setItem("histo_last_session_" + studentName, today);
+    setStreakDays(newStreak);
+    setPhase("results");
   };
 
   const confirm = () => {
@@ -866,31 +945,27 @@ save(seenKey, newSeen.length >= pool.length ? [] : newSeen);
     }]);
   };
 
+  const submitExamAnswer = async () => {
+    if (selected===null) return;
+    const q = questions[current];
+    const entry = {
+      questionId:q.id, question:q.question, difficulty:q.difficulty, supervised:q.supervised,
+      correct: selected===q.answer, userAnswer:selected, correctAnswer:q.answer,
+      confidence:1, timeMs: Date.now() - (questionStart||Date.now())
+    };
+    const finalAnswers = [...answers, entry];
+    setAnswers(finalAnswers);
+    if (current+1 >= questions.length) {
+      await finishSession(finalAnswers);
+      return;
+    }
+    setCurrent(c => c+1); setSelected(null); setConfidence(null); setConfirmed(false); setQuestionStart(Date.now());
+  };
+
   const next = async () => {
     if (current+1 >= questions.length) {
-      const sc = calcSessionScore(answers);
-      const sessionData = {
-        student:studentName, date:new Date().toISOString(),
-        durationMs: Date.now() - (sessionStart||Date.now()),
-        filter, answers, points: sc.points, bonuses: sc.bonuses
-      };
-      const { summary } = await saveSession(sessionData, save);
-      const updatedSessions = [...sessions, summary];
-      setSessions(updatedSessions);
-      // Actualizar índice de resúmenes
-      const existingKeys = await load("histo_summary_keys", [], true);
-      const keysArray = Array.isArray(existingKeys) ? existingKeys : [];
-      const updatedKeys = [...new Set([...keysArray, summary.id])];
-      await save("histo_summary_keys", updatedKeys, true);
-      const today = new Date().toISOString().split("T")[0];
-const lastDay = localStorage.getItem("histo_last_session_" + studentName);
-const currentStreak = parseInt(localStorage.getItem("histo_streak_" + studentName) || "0");
-const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
-const newStreak = lastDay === today ? currentStreak : lastDay === yesterday ? currentStreak + 1 : 1;
-localStorage.setItem("histo_streak_" + studentName, String(newStreak));
-localStorage.setItem("histo_last_session_" + studentName, today);
-setStreakDays(newStreak);
-setPhase("results"); return;
+      await finishSession(answers);
+      return;
     }
     setCurrent(c => c+1); setSelected(null); setConfidence(null); setConfirmed(false); setQuestionStart(Date.now());
   };
@@ -995,6 +1070,34 @@ if (phase === "config") {
         <p style={{fontSize:15,color:"var(--color-text-secondary)",margin:0}}>
           Hola, <strong style={{color:"var(--color-text-primary)"}}>{studentName}</strong>. Continúa mejorando tus conocimientos de histología con una sesión adaptada a tu nivel.
         </p>
+      </div>
+
+      {/* Misiones diarias */}
+      <div style={{marginBottom:24}}>
+        <p style={{fontSize:14,fontWeight:700,color:"var(--color-text-primary)",margin:"0 0 10px"}}>
+          Misiones diarias
+        </p>
+        <div style={{display:"grid",gridTemplateColumns:window.innerWidth<768?"1fr":"repeat(3,1fr)",gap:10}}>
+          {[
+            {title:"Sesión del día", done:learningSnapshot.sessionsToday > 0, value:Math.min(1, learningSnapshot.sessionsToday), target:1, detail:"Completa cualquier sesión"},
+            {title:"20 preguntas", done:learningSnapshot.questionsToday >= 20, value:Math.min(20, learningSnapshot.questionsToday), target:20, detail:"Suma práctica diaria"},
+            {title:"Modo examen", done:learningSnapshot.examToday, value:learningSnapshot.examToday?1:0, target:1, detail:"Haz un simulacro sin pistas"}
+          ].map(m => {
+            const pct = Math.round((m.value / m.target) * 100);
+            return (
+              <div key={m.title} style={{background:"#FFFFFF",border:"1px solid var(--color-border-tertiary)",borderRadius:16,padding:"12px 14px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",marginBottom:8}}>
+                  <div style={{fontSize:13,fontWeight:800,color:"var(--color-text-primary)"}}>{m.title}</div>
+                  <span style={{fontSize:12,fontWeight:800,color:m.done?"#1D9E75":"#BA7517"}}>{m.done?"Hecha":"Pendiente"}</span>
+                </div>
+                <div style={{height:7,borderRadius:999,background:"#F1F2F6",overflow:"hidden",marginBottom:7}}>
+                  <div style={{width:pct+"%",height:"100%",background:m.done?"#1D9E75":"#F5C518"}} />
+                </div>
+                <div style={{fontSize:11,color:"var(--color-text-secondary)"}}>{m.detail} · {m.value}/{m.target}</div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Difficulty */}
@@ -1132,6 +1235,22 @@ if (phase === "config") {
           boxShadow:"0 18px 35px rgba(108,76,255,0.28)"
         }}>
         Empezar quiz
+      </button>
+      <button onClick={startExam} disabled={!poolSize}
+        style={{
+          width:"100%",
+          marginTop:10,
+          padding:"14px 24px",
+          borderRadius:18,
+          fontSize:15,
+          fontWeight:800,
+          cursor:poolSize?"pointer":"not-allowed",
+          opacity:poolSize?1:0.5,
+          background:"#FFFFFF",
+          color:"#1A1060",
+          border:"1px solid #C9BBFF"
+        }}>
+        Modo examen · sin feedback inmediato
       </button>
     </div>
 
@@ -1439,7 +1558,7 @@ if (phase === "config") {
         })}
       </div>
 
-      {selected!==null && !confirmed && (
+      {selected!==null && !confirmed && sessionMode !== "exam" && (
         <div style={{marginBottom:"1.25rem",padding:"12px 14px",borderRadius:"var(--border-radius-md)",
           background:"var(--color-background-secondary)",border:"0.5px solid var(--color-border-tertiary)"}}>
           <p style={{fontSize:13,fontWeight:500,color:"var(--color-text-primary)",margin:"0 0 10px"}}>¿Con qué seguridad respondes?</p>
@@ -1458,7 +1577,7 @@ if (phase === "config") {
         </div>
       )}
 
-      {confirmed && (
+      {confirmed && sessionMode !== "exam" && (
         <div className="explain-box"
           style={{borderLeft:"3px solid",borderColor:selected===q.answer?"#1D9E75":"#D85A30",
             borderRadius:"0 var(--border-radius-md) var(--border-radius-md) 0",
@@ -1496,12 +1615,12 @@ if (phase === "config") {
 
       <div style={{display:"flex",gap:8}}>
         {!confirmed
-          ? <button onClick={confirm} disabled={selected===null||confidence===null}
+          ? <button onClick={sessionMode==="exam" ? submitExamAnswer : confirm} disabled={selected===null||(sessionMode!=="exam"&&confidence===null)}
               style={{padding:"8px 22px",borderRadius:"var(--border-radius-md)",fontSize:13,fontWeight:500,
-                cursor:(selected===null||confidence===null)?"not-allowed":"pointer",
-                opacity:(selected===null||confidence===null)?0.4:1,
+                cursor:(selected===null||(sessionMode!=="exam"&&confidence===null))?"not-allowed":"pointer",
+                opacity:(selected===null||(sessionMode!=="exam"&&confidence===null))?0.4:1,
                 background:"var(--color-background-info)",color:"var(--color-text-info)",border:"0.5px solid var(--color-border-info)"}}>
-              Confirmar respuesta
+              {sessionMode==="exam" ? (current+1>=questions.length?"Terminar examen":"Guardar y seguir") : "Confirmar respuesta"}
             </button>
           : <button onClick={next} className="next-btn"
               style={{padding:"8px 22px",borderRadius:"var(--border-radius-md)",fontSize:13,fontWeight:500,cursor:"pointer",
