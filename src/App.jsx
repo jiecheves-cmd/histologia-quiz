@@ -2300,6 +2300,7 @@ function TeacherMode({ db, updateDb, isSupervisor }) {
   const [activeFilter, setActiveFilter] = useState("todos");
 const [showAll, setShowAll] = useState(false);
   const [filterTopic, setFilterTopic]           = useState("todos");
+  const [exportTopic, setExportTopic]           = useState("todos");
   const [rankPeriod, setRankPeriod]             = useState("week");
   const [form, setForm] = useState({difficulty:"básico",topic:TOPICS[0],question:"",options:["","","",""],answer:0,explanation:"",image:null,link:""});
   const fileRef    = useRef();
@@ -2389,6 +2390,77 @@ const text = data.text;
       setGenMsg("Se añadieron "+newQs.length+" preguntas (pendientes de supervisión).");
     } catch(e) { setGenMsg("Error: "+e.message); }
     setGenerating(false);
+  };
+
+  const exportQuestionsToWord = () => {
+    const selectedQuestions = db
+      .filter(q => exportTopic === "todos" || q.topic === exportTopic)
+      .sort((a, b) => (a.topic || "").localeCompare(b.topic || "") || (a.question || "").localeCompare(b.question || ""));
+    if (!selectedQuestions.length) { alert("No hay preguntas para exportar con esa selección."); return; }
+
+    const escapeHtml = value => String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+    const answerLabel = idx => ["A","B","C","D"][idx] || (idx + 1);
+    const title = exportTopic === "todos" ? "Banco completo de preguntas" : "Preguntas - " + exportTopic;
+    const rows = selectedQuestions.map((q, i) => {
+      const correct = q.options?.[q.answer] ?? "";
+      const image = q.image ? `<p><img src="${q.image}" style="max-width:420px;max-height:260px;border:1px solid #ddd;border-radius:6px;" /></p>` : "";
+      const explanationImage = q.explanationImage ? `<p><strong>Imagen de explicación:</strong><br/><img src="${q.explanationImage}" style="max-width:420px;max-height:260px;border:1px solid #ddd;border-radius:6px;" /></p>` : "";
+      return `
+        <div class="question">
+          <h2>${i + 1}. ${escapeHtml(q.question)}</h2>
+          <p><strong>Tema:</strong> ${escapeHtml(q.topic || "Sin tema")} &nbsp; <strong>Dificultad:</strong> ${escapeHtml(q.difficulty || "Sin dificultad")} &nbsp; <strong>Supervisión:</strong> ${q.supervised ? "Supervisada" : "Pendiente"}</p>
+          ${image}
+          <ol type="A">
+            ${(q.options || []).map(opt => `<li>${escapeHtml(opt)}</li>`).join("")}
+          </ol>
+          <p><strong>Respuesta correcta:</strong> ${answerLabel(q.answer)}. ${escapeHtml(correct)}</p>
+          ${q.explanation ? `<p><strong>Explicación:</strong> ${escapeHtml(q.explanation)}</p>` : ""}
+          ${q.link ? `<p><strong>Enlace:</strong> ${escapeHtml(q.link)}</p>` : ""}
+          ${explanationImage}
+        </div>
+      `;
+    }).join("");
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8" />
+        <title>${escapeHtml(title)}</title>
+        <style>
+          body { font-family: Arial, sans-serif; color:#1A1060; line-height:1.45; }
+          h1 { font-size:24px; margin-bottom:4px; }
+          h2 { font-size:15px; margin:0 0 8px; color:#1A1060; }
+          .meta { color:#666; font-size:12px; margin-bottom:20px; }
+          .question { page-break-inside: avoid; border-bottom:1px solid #ddd; padding:14px 0; }
+          ol { margin-top:8px; }
+          li { margin-bottom:4px; }
+        </style>
+      </head>
+      <body>
+        <h1>${escapeHtml(title)}</h1>
+        <p class="meta">${selectedQuestions.length} pregunta${selectedQuestions.length !== 1 ? "s" : ""} · Exportado desde HistoMind</p>
+        ${rows}
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob(["\ufeff", html], { type: "application/msword;charset=utf-8" });
+    const filename = (exportTopic === "todos" ? "histomind_banco_preguntas" : "histomind_" + exportTopic)
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .toLowerCase() + ".doc";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const Nav = () => (
@@ -2914,6 +2986,20 @@ const text = data.text;
             <option value="todos">Todos los temas ({db.length})</option>
             {usedTopics.map(t => <option key={t} value={t}>{t} ({db.filter(q=>q.topic===t).length})</option>)}
           </select>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",borderTop:"0.5px solid var(--color-border-tertiary)",paddingTop:10}}>
+          <span style={{fontSize:12,fontWeight:500,color:"var(--color-text-secondary)",minWidth:80}}>Exportar:</span>
+          <select value={exportTopic} onChange={e => setExportTopic(e.target.value)}
+            style={{fontSize:12,padding:"4px 8px",borderRadius:"var(--border-radius-md)",
+              border:"0.5px solid var(--color-border-tertiary)",background:"var(--color-background-primary)",color:"var(--color-text-primary)"}}>
+            <option value="todos">Todas las preguntas ({db.length})</option>
+            {usedTopics.map(t => <option key={t} value={t}>{t} ({db.filter(q=>q.topic===t).length})</option>)}
+          </select>
+          <button onClick={exportQuestionsToWord}
+            style={{fontSize:12,padding:"5px 12px",borderRadius:"var(--border-radius-md)",cursor:"pointer",fontWeight:600,
+              background:"#E8F3FC",color:"#185FA5",border:"0.5px solid #9DC3E6"}}>
+            Exportar Word
+          </button>
         </div>
         {(filterSupervised!=="todas" || filterTopic!=="todos") && (
           <div style={{display:"flex",alignItems:"center",gap:8}}>
