@@ -627,6 +627,8 @@ useEffect(() => {
   const [questionStart, setQuestionStart] = useState(null);
   const [showRadarModal, setShowRadarModal] = useState(false);
   const [showRankingModal, setShowRankingModal] = useState(false);
+  const [rankingModalTab, setRankingModalTab] = useState("xp");
+  const [streakRanking, setStreakRanking] = useState([]);
   const [sessionMode, setSessionMode] = useState("practice");
   const [learningSnapshot, setLearningSnapshot] = useState({weakTopics:[], dueCount:0, errorCount:0, lowConfidenceCount:0, questionsToday:0, sessionsToday:0});
   const { save, load, list } = useStorage();
@@ -644,6 +646,16 @@ const myRank = ranking.findIndex(r => r.name === studentName) + 1;
 const myPoints = ranking.find(r => r.name === studentName)?.points || 0;
 const histoXP = myPoints;
 const totalQuestions = db.length;
+
+useEffect(() => {
+  list("histo_streak_", true).then(items => {
+    const rows = items
+      .map(item => item.value)
+      .filter(v => v && v.student && Number(v.best) > 0)
+      .sort((a,b) => (b.best || 0) - (a.best || 0));
+    setStreakRanking(rows);
+  });
+}, [sessions, streakDays]);
 
 
 const coveragePct = totalQuestions
@@ -930,6 +942,14 @@ save(seenKey, newSeen.length >= pool.length ? [] : newSeen);
     const newStreak = lastDay === today ? currentStreak : lastDay === yesterday ? currentStreak + 1 : 1;
     localStorage.setItem("histo_streak_" + studentName, String(newStreak));
     localStorage.setItem("histo_last_session_" + studentName, today);
+    const storedStreak = await load("histo_streak_" + studentName, null, true);
+    await save("histo_streak_" + studentName, {
+      student: studentName,
+      current: newStreak,
+      best: Math.max(newStreak, storedStreak?.best || 0),
+      lastDay: today,
+      updatedAt: new Date().toISOString()
+    }, true);
     setStreakDays(newStreak);
     setPhase("results");
   };
@@ -1347,7 +1367,9 @@ if (phase === "config") {
             <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start",marginBottom:18}}>
               <div>
                 <h3 style={{fontSize:20,fontWeight:800,color:"var(--color-text-primary)",margin:"0 0 4px"}}>Ranking global</h3>
-                <p style={{fontSize:13,color:"var(--color-text-secondary)",margin:0}}>Top 5 por HistoXP acumulado</p>
+                <p style={{fontSize:13,color:"var(--color-text-secondary)",margin:0}}>
+                  {rankingModalTab==="xp" ? "Top 5 por HistoXP acumulado" : "Top 5 por mejor racha histórica"}
+                </p>
               </div>
               <button onClick={() => setShowRankingModal(false)}
                 style={{fontSize:13,padding:"7px 12px",borderRadius:"var(--border-radius-md)",cursor:"pointer",
@@ -1355,8 +1377,19 @@ if (phase === "config") {
                 Cerrar
               </button>
             </div>
+            <div style={{display:"flex",gap:8,marginBottom:14}}>
+              {[["xp","HistoXP"],["streak","Mejor racha"]].map(([key,label]) => (
+                <button key={key} onClick={() => setRankingModalTab(key)}
+                  style={{fontSize:12,padding:"6px 12px",borderRadius:999,cursor:"pointer",fontWeight:800,
+                    background:rankingModalTab===key?"#6C4CFF":"#F8F7FC",
+                    color:rankingModalTab===key?"#fff":"var(--color-text-secondary)",
+                    border:rankingModalTab===key?"1px solid #6C4CFF":"1px solid var(--color-border-tertiary)"}}>
+                  {label}
+                </button>
+              ))}
+            </div>
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {ranking.slice(0,5).map((r,i) => {
+              {rankingModalTab==="xp" && ranking.slice(0,5).map((r,i) => {
                 const isMe = r.name === studentName;
                 const medals = ["🥇","🥈","🥉"];
                 return (
@@ -1371,12 +1404,27 @@ if (phase === "config") {
                   </div>
                 );
               })}
-              {ranking.length === 0 && (
+              {rankingModalTab==="streak" && streakRanking.slice(0,5).map((r,i) => {
+                const isMe = r.student === studentName;
+                const medals = ["🥇","🥈","🥉"];
+                return (
+                  <div key={r.student} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",
+                    borderRadius:14,background:isMe?"#F0EAF9":"#F8F7FC",border:"0.5px solid "+(isMe?"#C9A8F0":"var(--color-border-tertiary)")}}>
+                    <span style={{fontSize:i<3?22:13,minWidth:32,textAlign:"center",fontWeight:800,color:"#6C4CFF"}}>{i<3?medals[i]:(i+1)+"."}</span>
+                    <Avatar name={r.student} size={30} />
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:isMe?800:600,color:"var(--color-text-primary)"}}>{r.student}{isMe?" (tú)":""}</div>
+                    </div>
+                    <div style={{fontSize:13,fontWeight:800,color:"#F97316"}}>{r.best} día{r.best!==1?"s":""}</div>
+                  </div>
+                );
+              })}
+              {((rankingModalTab==="xp" && ranking.length === 0) || (rankingModalTab==="streak" && streakRanking.length === 0)) && (
                 <div style={{padding:"1.25rem",textAlign:"center",color:"var(--color-text-secondary)",background:"#F8F7FC",borderRadius:14}}>
                   Aún no hay datos de ranking.
                 </div>
               )}
-              {myRank > 5 && (
+              {rankingModalTab==="xp" && myRank > 5 && (
                 <>
                   <div style={{height:1,background:"var(--color-border-tertiary)",margin:"6px 0"}} />
                   <div style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",
@@ -1390,6 +1438,25 @@ if (phase === "config") {
                   </div>
                 </>
               )}
+              {rankingModalTab==="streak" && (() => {
+                const myStreakPos = streakRanking.findIndex(r => r.student === studentName);
+                const myStreak = myStreakPos >= 0 ? streakRanking[myStreakPos] : null;
+                if (!myStreak || myStreakPos < 5) return null;
+                return (
+                  <>
+                    <div style={{height:1,background:"var(--color-border-tertiary)",margin:"6px 0"}} />
+                    <div style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",
+                      borderRadius:14,background:"#F0EAF9",border:"0.5px solid #C9A8F0"}}>
+                      <span style={{fontSize:13,minWidth:32,textAlign:"center",fontWeight:800,color:"#6C4CFF"}}>{myStreakPos+1}.</span>
+                      <Avatar name={studentName} size={30} />
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:13,fontWeight:800,color:"var(--color-text-primary)"}}>{studentName} (tú)</div>
+                      </div>
+                      <div style={{fontSize:13,fontWeight:800,color:"#F97316"}}>{myStreak.best} día{myStreak.best!==1?"s":""}</div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -2955,10 +3022,11 @@ function SupervisorMode({ users, updateUsers, passwordRequests, setPasswordReque
     setResetBusy(true);
     setResetMsg("Reseteando progreso...");
     try {
-      const [summaries, details, seen] = await Promise.all([
+      const [summaries, details, seen, streaks] = await Promise.all([
         list("histo_summary_", true),
         list("histo_detail_", false),
-        list("histo_seen_", false)
+        list("histo_seen_", false),
+        list("histo_streak_", true)
       ]);
 
       await Promise.all([
@@ -2967,6 +3035,7 @@ function SupervisorMode({ users, updateUsers, passwordRequests, setPasswordReque
           .map(item => save(item.key, null, true)),
         ...details.map(item => save(item.key, null, false)),
         ...seen.map(item => save(item.key, [], false)),
+        ...streaks.map(item => save(item.key, null, true)),
         save("histo_sessions", [], true),
         save("histo_summary_keys", [], true),
         save("histo_migration_done", true, true),
