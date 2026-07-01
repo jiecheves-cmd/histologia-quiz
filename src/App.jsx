@@ -116,6 +116,71 @@ function periodKey(dateStr, period) {
   return "" + d.getFullYear();
 }
 
+function getLocalDayKey(dateStr) {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return null;
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getBestStreakFromDays(dayKeys) {
+  const sorted = [...new Set(dayKeys)].sort();
+  let best = 0;
+  let current = 0;
+  let previous = null;
+  sorted.forEach(dayKey => {
+    const day = new Date(dayKey + "T12:00:00");
+    if (!previous) {
+      current = 1;
+    } else {
+      const diffDays = Math.round((day - previous) / 86400000);
+      current = diffDays === 1 ? current + 1 : 1;
+    }
+    best = Math.max(best, current);
+    previous = day;
+  });
+  return best;
+}
+
+function buildStreakRanking(allSessions, storedStreakItems = []) {
+  const daysByStudent = {};
+  allSessions.forEach(s => {
+    if (!s.student || !s.date) return;
+    const dayKey = getLocalDayKey(s.date);
+    if (!dayKey) return;
+    if (!daysByStudent[s.student]) daysByStudent[s.student] = [];
+    daysByStudent[s.student].push(dayKey);
+  });
+
+  const rowsByStudent = {};
+  Object.entries(daysByStudent).forEach(([student, dayKeys]) => {
+    rowsByStudent[student] = {
+      student,
+      current: 0,
+      best: getBestStreakFromDays(dayKeys),
+      lastDay: dayKeys.sort().at(-1)
+    };
+  });
+
+  storedStreakItems.forEach(item => {
+    const value = item.value;
+    if (!value?.student) return;
+    const existing = rowsByStudent[value.student] || { student: value.student, current: 0, best: 0, lastDay: null };
+    rowsByStudent[value.student] = {
+      ...existing,
+      current: Math.max(existing.current || 0, Number(value.current) || 0),
+      best: Math.max(existing.best || 0, Number(value.best) || 0, Number(value.current) || 0),
+      lastDay: existing.lastDay || value.lastDay
+    };
+  });
+
+  return Object.values(rowsByStudent)
+    .filter(r => Number(r.best) > 0)
+    .sort((a,b) => (b.best || 0) - (a.best || 0) || a.student.localeCompare(b.student));
+}
+
 
 function diffStyle(d) {
   const n = (d||"").toLowerCase().trim();
@@ -655,11 +720,7 @@ const totalQuestions = db.length;
 
 useEffect(() => {
   list("histo_streak_", true).then(items => {
-    const rows = items
-      .map(item => item.value)
-      .filter(v => v && v.student && Number(v.best) > 0)
-      .sort((a,b) => (b.best || 0) - (a.best || 0));
-    setStreakRanking(rows);
+    setStreakRanking(buildStreakRanking(sessions, items));
   });
 }, [sessions, streakDays]);
 
