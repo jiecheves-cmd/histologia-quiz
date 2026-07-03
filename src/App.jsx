@@ -374,6 +374,18 @@ function applyProgressReset(resetAt) {
   });
   localStorage.setItem("histo_progress_reset_seen", resetAt);
 }
+
+const SESSION_USER_KEY = "histo_current_user_id";
+const SESSION_TAB_KEY = "histo_current_tab";
+
+function getAllowedTab(user, requestedTab) {
+  const canTeacher = user?.role === "profesor" || user?.role === "supervisor";
+  const canSuper = user?.role === "supervisor";
+  if (requestedTab === "profesor" && canTeacher) return requestedTab;
+  if (requestedTab === "supervisor" && canSuper) return requestedTab;
+  if (requestedTab === "perfil") return requestedTab;
+  return "alumno";
+}
 // ─── APP ──────────────────────────────────────────────────────────────────────
 const LEVELS = [
   { level: 1, title: "🔬 Aprendiz", xp: 0, coverage: 0 },
@@ -412,6 +424,12 @@ useEffect(() => {
       setDb(d);
       setUsers(u);
       setSessions(s);
+      const savedUserId = localStorage.getItem(SESSION_USER_KEY);
+      const restoredUser = u.find(user => user.id === savedUserId && user.active);
+      if (restoredUser) {
+        setCurrentUser(restoredUser);
+        setTab(getAllowedTab(restoredUser, localStorage.getItem(SESSION_TAB_KEY)));
+      }
       setLoaded(true);
     });
   });
@@ -441,7 +459,24 @@ useEffect(() => {
     setPasswordRequests(prev => [...prev.filter(r => r !== username.trim()), username.trim()]);
     alert("Tu solicitud ha sido enviada al supervisor. Contacta con tu profesor para obtener una nueva contraseña.");
   };
-  if (!currentUser) return <LoginScreen users={users} onLogin={u => { setCurrentUser(u); setTab("alumno"); }} onPasswordRequest={handlePasswordRequest} />;
+  const selectTab = nextTab => {
+    const allowedTab = getAllowedTab(currentUser, nextTab);
+    setTab(allowedTab);
+    localStorage.setItem(SESSION_TAB_KEY, allowedTab);
+  };
+  const handleLogin = u => {
+    setCurrentUser(u);
+    setTab("alumno");
+    localStorage.setItem(SESSION_USER_KEY, u.id);
+    localStorage.setItem(SESSION_TAB_KEY, "alumno");
+  };
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setTab("alumno");
+    localStorage.removeItem(SESSION_USER_KEY);
+    localStorage.removeItem(SESSION_TAB_KEY);
+  };
+  if (!currentUser) return <LoginScreen users={users} onLogin={handleLogin} onPasswordRequest={handlePasswordRequest} />;
 
   const role      = currentUser.role;
   const canTeacher = role === "profesor" || role === "supervisor";
@@ -466,12 +501,12 @@ useEffect(() => {
           </div>
         </div>
         <div style={{display:"flex",gap:8}}>
-          <button onClick={() => setTab("perfil")}
+          <button onClick={() => selectTab("perfil")}
             style={{fontSize:12,padding:"5px 14px",borderRadius:"var(--border-radius-md)",cursor:"pointer",
               background:"transparent",color:"var(--color-text-secondary)",border:"0.5px solid var(--color-border-tertiary)"}}>
             👤 Mi perfil
           </button>
-          <button onClick={() => setCurrentUser(null)}
+          <button onClick={handleLogout}
             style={{fontSize:12,padding:"5px 14px",borderRadius:"var(--border-radius-md)",cursor:"pointer",
               background:"transparent",color:"var(--color-text-secondary)",border:"0.5px solid var(--color-border-tertiary)"}}>
             Cerrar sesión
@@ -482,7 +517,7 @@ useEffect(() => {
       {canTeacher && (
         <div style={{display:"flex",gap:8,marginBottom:"1.5rem",flexWrap:"wrap"}}>
           {[["Modo Alumno","alumno"],["Modo Profesor","profesor"],...(canSuper?[["Supervisor","supervisor"]]:[])].map(([l,v]) => (
-            <button key={v} onClick={() => setTab(v)}
+            <button key={v} onClick={() => selectTab(v)}
               style={{padding:"6px 16px",borderRadius:"var(--border-radius-md)",fontSize:13,fontWeight:500,cursor:"pointer",
                 background:tab===v?"var(--color-background-info)":"transparent",
                 color:tab===v?"var(--color-text-info)":"var(--color-text-secondary)",
@@ -494,7 +529,7 @@ useEffect(() => {
       )}
 
       {tab==="alumno"     && <StudentMode db={db} studentName={currentUser.displayName} />}
-      {tab==="perfil"     && <ProfileScreen currentUser={currentUser} updateUsers={updateUsers} users={users} onBack={()=>setTab("alumno")} />}
+      {tab==="perfil"     && <ProfileScreen currentUser={currentUser} updateUsers={updateUsers} users={users} onBack={()=>selectTab("alumno")} />}
       {tab==="profesor"   && canTeacher && <TeacherMode db={db} updateDb={updateDb} isSupervisor={canSuper} />}
       {tab==="supervisor" && canSuper   && <SupervisorMode users={users} updateUsers={updateUsers} passwordRequests={passwordRequests} setPasswordRequests={setPasswordRequests} />}
     </div>
