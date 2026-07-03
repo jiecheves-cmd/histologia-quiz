@@ -2552,7 +2552,22 @@ const text = data.text;
       qStats[a.questionId].total++;
       if (a.correct) qStats[a.questionId].correct++;
     });
-    const qList = Object.values(qStats).sort((a,b) => (a.correct/a.total)-(b.correct/b.total));
+    const qList = Object.values(qStats)
+      .map(q => {
+        const incorrect = q.total - q.correct;
+        return {
+          ...q,
+          incorrect,
+          correctPct: Math.round(q.correct / q.total * 100),
+          failurePct: Math.round(incorrect / q.total * 100)
+        };
+      })
+      .sort((a,b) =>
+        b.incorrect - a.incorrect ||
+        b.failurePct - a.failurePct ||
+        b.total - a.total
+      );
+    const mostFailedQuestions = qList.filter(q => q.incorrect > 0);
 
     const stuStats = {};
     sessions.forEach(s => {
@@ -2576,7 +2591,7 @@ const text = data.text;
     const topicList = Object.values(topicStats).filter(t=>t.total>0).sort((a,b)=>(a.correct/a.total)-(b.correct/b.total));
 
     const globalPct = allA.length ? Math.round(allA.filter(a=>a.correct).length/allA.length*100) : 0;
-    const criticalQs = qList.filter(q => Math.round(q.correct/q.total*100) < 40).length;
+    const criticalQs = qList.filter(q => q.correctPct < 40).length;
 
     return (
       <div>
@@ -2612,16 +2627,24 @@ const text = data.text;
 
             {/* Preguntas más falladas */}
             <div style={{background:"var(--color-background-primary)",border:"0.5px solid var(--color-border-tertiary)",borderRadius:"var(--border-radius-lg)",padding:"1rem 1.25rem",marginBottom:16}}>
-              <p style={{fontSize:13,fontWeight:500,margin:"0 0 14px",color:"var(--color-text-primary)"}}>Preguntas más falladas</p>
-              {qList.slice(0,8).map((q,i) => {
+              <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"baseline",marginBottom:14}}>
+                <p style={{fontSize:13,fontWeight:500,margin:0,color:"var(--color-text-primary)"}}>Preguntas más falladas</p>
+                <span style={{fontSize:11,color:"var(--color-text-secondary)"}}>Ordenadas por fallos reales</span>
+              </div>
+              {mostFailedQuestions.length === 0 && (
+                <div style={{padding:"1rem",textAlign:"center",color:"var(--color-text-secondary)",background:"var(--color-background-secondary)",borderRadius:"var(--border-radius-md)",fontSize:12}}>
+                  Todavía no hay preguntas falladas en las sesiones registradas.
+                </div>
+              )}
+              {mostFailedQuestions.slice(0,8).map((q,i) => {
                 const sourceQuestion = db.find(x => String(x.id) === String(q.questionId));
-                const pct = Math.round(q.correct/q.total*100);
-                const isRed = pct < 40;
+                const pct = q.failurePct;
+                const isRed = pct >= 60;
                 const isAmber = pct >= 40 && pct < 60;
                 const color = isRed?"#E24B4A":isAmber?"#EF9F27":"#639922";
                 const badgeBg = isRed?"#FCEBEB":isAmber?"#FAEEDA":"#EAF3DE";
                 const badgeColor = isRed?"#A32D2D":isAmber?"#854F0B":"#3B6D11";
-                const badgeText = isRed?"Crítica":isAmber?"Revisar":"OK";
+                const badgeText = isRed?"Muy fallada":isAmber?"Revisar":"Pocos fallos";
                 return (
                   <button key={i} onClick={() => sourceQuestion && openEdit(sourceQuestion)} disabled={!sourceQuestion}
                     title={sourceQuestion ? "Editar: " + sourceQuestion.question : q.question}
@@ -2636,7 +2659,12 @@ const text = data.text;
                     <div style={{flex:1,height:8,background:"var(--color-background-secondary)",borderRadius:4,overflow:"hidden"}}>
                       <div style={{width:pct+"%",height:"100%",background:color,borderRadius:4}} />
                     </div>
-                    <div style={{fontSize:12,fontWeight:500,color:color,width:36,textAlign:"right"}}>{pct}%</div>
+                    <div style={{fontSize:12,fontWeight:700,color:color,width:86,textAlign:"right"}}>
+                      {q.incorrect} fallo{q.incorrect!==1?"s":""}
+                    </div>
+                    <div style={{fontSize:11,color:"var(--color-text-secondary)",width:82,textAlign:"right"}}>
+                      {q.total} intento{q.total!==1?"s":""}
+                    </div>
                     <span style={{fontSize:10,padding:"2px 8px",borderRadius:10,fontWeight:500,background:badgeBg,color:badgeColor,flexShrink:0}}>{badgeText}</span>
                     <span style={{fontSize:11,color:sourceQuestion?"#6C4CFF":"var(--color-text-secondary)",fontWeight:600,width:44,textAlign:"right",flexShrink:0}}>
                       {sourceQuestion ? "Editar" : "No encontrada"}
