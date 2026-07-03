@@ -2382,7 +2382,7 @@ const [showAll, setShowAll] = useState(false);
   const openEdit = q => {
     setForm({difficulty:q.difficulty,topic:q.topic||TOPICS[0],question:q.question,
       options:[...q.options],answer:q.answer,explanation:q.explanation,
-      explanationImage:q.explanationImage||null,image:q.image||null});
+      explanationImage:q.explanationImage||null,image:q.image||null,link:q.link||""});
     setEditing(q.id); setView("edit");
   };
   const del = id => { updateDb(db.filter(q => q.id!==id)); setConfirmDelete(null); };
