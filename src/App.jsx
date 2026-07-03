@@ -3033,6 +3033,16 @@ const text = data.text;
   // ── List ──
   const supervised  = db.filter(q => q.supervised).length;
   const usedTopics  = [...new Set(db.map(q => q.topic).filter(Boolean))].sort();
+  const questionPerformance = sessionDetails
+    .flatMap(s => s.answers || [])
+    .reduce((acc, answer) => {
+      if (!answer.questionId) return acc;
+      const key = String(answer.questionId);
+      if (!acc[key]) acc[key] = { correct: 0, total: 0 };
+      acc[key].total++;
+      if (answer.correct) acc[key].correct++;
+      return acc;
+    }, {});
   const filteredDb  = db.filter(q => {
     const supOk   = filterSupervised==="todas" || (filterSupervised==="supervisadas"&&q.supervised) || (filterSupervised==="pendientes"&&!q.supervised);
     const topicOk = filterTopic==="todos" || q.topic===filterTopic;
@@ -3109,6 +3119,12 @@ const text = data.text;
         )}
         {filteredDb.map(q => {
           const ds = diffStyle(q.difficulty);
+          const perf = questionPerformance[String(q.id)];
+          const correct = perf?.correct || 0;
+          const total = perf?.total || 0;
+          const pct = total ? Math.round(correct / total * 100) : null;
+          const perfColor = pct == null ? "var(--color-text-secondary)" : pct >= 70 ? "#0F6E56" : pct >= 40 ? "#7A4A00" : "#993C1D";
+          const perfBg = pct == null ? "var(--color-background-secondary)" : pct >= 70 ? "#E1F5EE" : pct >= 40 ? "#FEF3DC" : "#FAECE7";
           return (
             <div key={q.id} style={{display:"flex",alignItems:"flex-start",gap:12,padding:"10px 14px",
               borderRadius:"var(--border-radius-md)",
@@ -3131,7 +3147,13 @@ const text = data.text;
                   )}
                 </div>
               </div>
-              <div style={{display:"flex",gap:6,flexShrink:0}}>
+              <div style={{display:"flex",gap:8,flexShrink:0,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end"}}>
+                <div title="Aciertos / intentos · porcentaje"
+                  style={{fontSize:11,padding:"4px 9px",borderRadius:10,fontWeight:700,
+                    background:perfBg,color:perfColor,border:"0.5px solid var(--color-border-tertiary)",
+                    minWidth:96,textAlign:"center"}}>
+                  {total ? `${correct}/${total} · ${pct}%` : "0/0 · sin datos"}
+                </div>
                 <button onClick={() => openEdit(q)}
                   style={{fontSize:12,padding:"4px 10px",borderRadius:"var(--border-radius-md)",cursor:"pointer",
                     background:"transparent",color:"var(--color-text-secondary)",border:"0.5px solid var(--color-border-tertiary)"}}>
